@@ -3,6 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+    "main": "./dist/my-element.umd.js",
+  "module": "./dist/my-element.es.js",
+  "exports": {
+    ".": {
+      "import": "./dist/my-element.es.js",
+      "require": "./dist/my-element.umd.js"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
