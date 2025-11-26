@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-    "main": "./dist/my-element.umd.js",
+  "main": "./dist/my-element.umd.js",
   "module": "./dist/my-element.es.js",
   "exports": {
     ".": {
@@ -17,6 +17,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/react": "^19.2.7",
     "typescript": "~5.9.3",
     "vite": "^7.2.4"
   }
