@@ -1,5 +1,11 @@
 // src/gridie/gridie.ts
 
+import { SortingManager } from './sortingFunctions';
+import type { SortDirection } from './sortingFunctions';
+import { getLanguage } from './lang';
+import type { Language, LanguageStrings } from './lang';
+import { gridieStyles, contextMenuStyles } from './styles';
+
 export interface GridieHeaderConfig {
   label?: string;
   sortable?: boolean;
@@ -21,6 +27,7 @@ export interface GridieConfig {
   enableSort?: boolean;
   enableFilter?: boolean;
   enablePagination?: boolean;
+  language?: Language;
 }
 
 export class Gridie extends HTMLElement {
@@ -28,36 +35,74 @@ export class Gridie extends HTMLElement {
   private _id: string = '';
   private _headers: (string | GridieHeaderConfig)[] = [];
   private _body: any[] = [];
+  private _originalBody: any[] = [];
   private _config: Partial<GridieConfig> = {};
   private _eventHandlers: Map<string, GridieCellAction> = new Map();
+  private _sortingManager: SortingManager = new SortingManager();
+  private _language: Language = 'es';
+  private _lang: LanguageStrings;
+  private _contextMenu: HTMLDivElement | null = null;
+  private _globalStyleId = 'gridie-global-styles';
 
   constructor(config?: GridieConfig) {
     super();
     this.shadow = this.attachShadow({ mode: "open" });
+    this._lang = getLanguage(this._language);
+    this.injectGlobalStyles();
     
     if (config) {
       this._id = config.id;
       this._headers = config.headers;
       this._body = config.body;
+      this._originalBody = [...config.body];
+      this._language = config.language || 'es';
+      this._lang = getLanguage(this._language);
       this._config = {
-        enableSort: config.enableSort ?? false,
+        enableSort: config.enableSort ?? true,
         enableFilter: config.enableFilter ?? false,
         enablePagination: config.enablePagination ?? false,
+        language: this._language,
       };
     }
   }
 
   static get observedAttributes() {
-    return ["id", "headers", "body", "config"];
+    return ["id", "headers", "body", "config", "language"];
   }
 
   connectedCallback() {
     this.render();
+    document.addEventListener('click', this.handleDocumentClick.bind(this));
+  }
+
+  disconnectedCallback() {
+    document.removeEventListener('click', this.handleDocumentClick.bind(this));
+    this.removeGlobalStyles();
   }
 
   attributeChangedCallback(name: string, oldValue: string, newValue: string) {
     if (oldValue !== newValue) {
+      if (name === 'language') {
+        this._language = newValue as Language;
+        this._lang = getLanguage(this._language);
+      }
       this.render();
+    }
+  }
+
+  private injectGlobalStyles(): void {
+    if (document.getElementById(this._globalStyleId)) return;
+
+    const style = document.createElement('style');
+    style.id = this._globalStyleId;
+    style.textContent = contextMenuStyles;
+    document.head.appendChild(style);
+  }
+
+  private removeGlobalStyles(): void {
+    const style = document.getElementById(this._globalStyleId);
+    if (style) {
+      style.remove();
     }
   }
 
@@ -65,34 +110,47 @@ export class Gridie extends HTMLElement {
     this._id = config.id;
     this._headers = config.headers;
     this._body = config.body;
+    this._originalBody = [...config.body];
+    this._language = config.language || 'es';
+    this._lang = getLanguage(this._language);
     this._config = {
-      enableSort: config.enableSort ?? false,
+      enableSort: config.enableSort ?? true,
       enableFilter: config.enableFilter ?? false,
       enablePagination: config.enablePagination ?? false,
+      language: this._language,
     };
+    this._sortingManager.clearAll();
     this.render();
   }
 
   setData(config: { headers: (string | GridieHeaderConfig)[], data: any[] }) {
     this._headers = config.headers;
     this._body = config.data;
+    this._originalBody = [...config.data];
+    this._sortingManager.clearAll();
     this.render();
   }
 
   addRow(row: any) {
-    this._body.push(row);
-    this.render();
+    this._originalBody.push(row);
+    this.applySorting();
   }
 
   removeRow(index: number) {
-    this._body.splice(index, 1);
-    this.render();
+    const originalIndex = this._originalBody.findIndex(r => r === this._body[index]);
+    if (originalIndex !== -1) {
+      this._originalBody.splice(originalIndex, 1);
+    }
+    this.applySorting();
   }
 
   updateRow(index: number, row: any) {
     if (index >= 0 && index < this._body.length) {
-      this._body[index] = { ...this._body[index], ...row };
-      this.render();
+      const originalIndex = this._originalBody.findIndex(r => r === this._body[index]);
+      if (originalIndex !== -1) {
+        this._originalBody[originalIndex] = { ...this._originalBody[originalIndex], ...row };
+      }
+      this.applySorting();
     }
   }
 
@@ -111,14 +169,7 @@ export class Gridie extends HTMLElement {
   }
 
   get body(): any[] {
-    if (this._body.length > 0) return this._body;
-    
-    try {
-      const bodyAttr = this.getAttribute("body");
-      return bodyAttr ? JSON.parse(bodyAttr) : [];
-    } catch {
-      return [];
-    }
+    return this._body.length > 0 ? this._body : [];
   }
 
   private getAttributeHeaders(): (string | GridieHeaderConfig)[] {
@@ -134,27 +185,23 @@ export class Gridie extends HTMLElement {
     if (typeof header === 'string') {
       return {
         label: header,
-        sortable: false,
+        sortable: this._config.enableSort ?? true,
         filterable: false,
       };
     }
     return {
       label: header.label || `Column ${position + 1}`,
-      sortable: header.sortable ?? false,
+      sortable: header.sortable ?? (this._config.enableSort ?? true),
       filterable: header.filterable ?? false,
       type: header.type,
       width: header.width,
     };
   }
 
-  // Obtener el valor de una celda por POSICIÓN
   private getCellValueByPosition(row: any, position: number): any {
-    // Si el row es un array, acceder directamente por índice
     if (Array.isArray(row)) {
       return row[position];
     }
-    
-    // Si el row es un objeto, obtener el valor por posición de las keys
     const values = Object.values(row);
     return values[position];
   }
@@ -179,23 +226,137 @@ export class Gridie extends HTMLElement {
   }
 
   private renderCell(row: any, header: GridieHeaderConfig, position: number, rowIndex: number): string {
-    // Obtener el valor por POSICIÓN, no por nombre de field
     const cellValue = this.getCellValueByPosition(row, position);
     
-    // Si es una celda con acciones
     if (this.isActionCell(cellValue)) {
       return cellValue.map((action, actionIndex) => {
         const actionId = `action-${rowIndex}-${position}-${actionIndex}`;
-        
-        // Guardar el handler para usarlo después
         this._eventHandlers.set(actionId, action);
-        
         return `<span data-action-id="${actionId}">${action.content}</span>`;
       }).join(' ');
     }
     
-    // Formatear el valor según el tipo
     return this.formatCellValue(cellValue, header.type);
+  }
+
+  private handleHeaderClick(columnIndex: number): void {
+    const header = this.headers[columnIndex];
+    if (!header.sortable) return;
+
+    const currentSort = this._sortingManager.getColumnSort(columnIndex);
+    let newDirection: SortDirection;
+
+    if (!currentSort) {
+      newDirection = 'asc';
+    } else if (currentSort.direction === 'asc') {
+      newDirection = 'desc';
+    } else {
+      newDirection = null;
+    }
+
+    this._sortingManager.addSort(columnIndex, newDirection);
+    this.applySorting();
+  }
+
+  private handleHeaderRightClick(event: MouseEvent, columnIndex: number): void {
+    event.preventDefault();
+    const header = this.headers[columnIndex];
+    if (!header.sortable) return;
+
+    this.showContextMenu(event.clientX, event.clientY, columnIndex);
+  }
+
+  private showContextMenu(x: number, y: number, columnIndex: number): void {
+    this.hideContextMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'gridie-context-menu';
+    menu.style.position = 'fixed';
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+
+    const hasMultipleSorts = this._sortingManager.getAllSorts().length > 1;
+    const hasColumnSort = this._sortingManager.getColumnSort(columnIndex) !== null;
+
+    menu.innerHTML = `
+      <div class="context-menu-item" data-action="sort-asc">
+        ▲ ${this._lang.sorting.sortAscending}
+      </div>
+      <div class="context-menu-item" data-action="sort-desc">
+        ▼ ${this._lang.sorting.sortDescending}
+      </div>
+      ${hasColumnSort ? `
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-action="clear-sort">
+          ${this._lang.sorting.clearSorting}
+        </div>
+      ` : ''}
+      ${hasMultipleSorts ? `
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-action="clear-all-sort">
+          ${this._lang.sorting.clearAllSorting}
+        </div>
+      ` : ''}
+    `;
+
+    menu.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('context-menu-item')) {
+        const action = target.dataset.action;
+        this.handleContextMenuAction(action!, columnIndex);
+        this.hideContextMenu();
+      }
+    });
+
+    document.body.appendChild(menu);
+    this._contextMenu = menu;
+  }
+
+  private hideContextMenu(): void {
+    if (this._contextMenu) {
+      document.body.removeChild(this._contextMenu);
+      this._contextMenu = null;
+    }
+  }
+
+  private handleDocumentClick(event: Event): void {
+    const target = event.target as HTMLElement;
+    if (this._contextMenu && !this._contextMenu.contains(target)) {
+      this.hideContextMenu();
+    }
+  }
+
+  private handleContextMenuAction(action: string, columnIndex: number): void {
+    switch (action) {
+      case 'sort-asc':
+        this._sortingManager.addSort(columnIndex, 'asc');
+        break;
+      case 'sort-desc':
+        this._sortingManager.addSort(columnIndex, 'desc');
+        break;
+      case 'clear-sort':
+        this._sortingManager.clearColumn(columnIndex);
+        break;
+      case 'clear-all-sort':
+        this._sortingManager.clearAll();
+        break;
+    }
+    this.applySorting();
+  }
+
+  private applySorting(): void {
+    this._body = this._sortingManager.applySorts(this._originalBody, this.headers);
+    this.render();
+  }
+
+  private getSortIndicator(columnIndex: number): string {
+    const sortState = this._sortingManager.getColumnSort(columnIndex);
+    if (!sortState) return '';
+
+    const arrow = sortState.direction === 'asc' ? '▲' : '▼';
+    const order = this._sortingManager.getAllSorts().length > 1 ? ` ${sortState.order}` : '';
+    
+    return `<span class="sort-indicator">${arrow}${order}</span>`;
   }
 
   render() {
@@ -203,69 +364,11 @@ export class Gridie extends HTMLElement {
     const body = this.body;
     const gridieId = this.gridieId;
 
-    // Limpiar handlers anteriores
     this._eventHandlers.clear();
 
     this.shadow.innerHTML = `
       <style>
-        .gridie-container {
-          width: 100%;
-          overflow-x: auto;
-          font-family: Arial, sans-serif;
-        }
-
-        .gridie-table {
-          width: 100%;
-          border-collapse: collapse;
-          background: white;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-          border-radius: 8px;
-          overflow: hidden;
-        }
-
-        .gridie-table thead {
-         border-bottom: 1px solid #e0e0e0;
-        }
-
-        .gridie-table th {
-          padding: 15px;
-          text-align: left;
-          font-weight: 600;
-          text-transform: uppercase;
-          font-size: 0.85em;
-          letter-spacing: 0.5px;
-        }
-
-        .gridie-table td {
-          padding: 12px 15px;
-          border-bottom: 1px solid #e0e0e0;
-        }
-
-        .gridie-table tbody tr:hover {
-          background: #f5f5f5;
-          transition: background 0.2s;
-        }
-
-        .gridie-table tbody tr:last-child td {
-          border-bottom: none;
-        }
-
-        .no-data {
-          text-align: center;
-          padding: 40px;
-          color: #999;
-          font-style: italic;
-        }
-
-        .gridie-id {
-          font-size: 0.75em;
-          color: #999;
-          margin-bottom: 8px;
-          padding: 4px 8px;
-          background: #f5f5f5;
-          border-radius: 4px;
-          display: inline-block;
-        }
+        ${gridieStyles}
       </style>
 
       <div class="gridie-container" data-gridie-id="${gridieId}">
@@ -273,7 +376,14 @@ export class Gridie extends HTMLElement {
         <table class="gridie-table">
           <thead>
             <tr>
-              ${headers.map(header => `<th>${header.label}</th>`).join('')}
+              ${headers.map((header, index) => `
+                <th 
+                  class="${header.sortable ? 'sortable' : ''}" 
+                  data-column-index="${index}"
+                >
+                  ${header.label}${this.getSortIndicator(index)}
+                </th>
+              `).join('')}
             </tr>
           </thead>
           <tbody>
@@ -285,7 +395,7 @@ export class Gridie extends HTMLElement {
                     ).join('')}
                   </tr>
                 `).join('')
-              : `<tr><td colspan="${headers.length}" class="no-data">No hay datos disponibles</td></tr>`
+              : `<tr><td colspan="${headers.length}" class="no-data">${this._lang.table.noData}</td></tr>`
             }
           </tbody>
         </table>
@@ -293,9 +403,24 @@ export class Gridie extends HTMLElement {
     `;
 
     this.attachActionEvents();
+    this.attachHeaderEvents();
   }
 
-  private attachActionEvents() {
+  private attachHeaderEvents(): void {
+    this.shadow.querySelectorAll('th[data-column-index]').forEach(th => {
+      const columnIndex = parseInt((th as HTMLElement).dataset.columnIndex!);
+      
+      th.addEventListener('click', () => {
+        this.handleHeaderClick(columnIndex);
+      });
+
+      th.addEventListener('contextmenu', (e) => {
+        this.handleHeaderRightClick(e as MouseEvent, columnIndex);
+      });
+    });
+  }
+
+  private attachActionEvents(): void {
     this._eventHandlers.forEach((action, actionId) => {
       const element = this.shadow.querySelector(`[data-action-id="${actionId}"]`);
       

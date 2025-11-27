@@ -117,6 +117,7 @@ export function render(container: HTMLElement): void {
         ]
       },
     ],
+    
   };
 
   gridie.setConfig(config);
