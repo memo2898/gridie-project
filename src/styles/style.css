@@ -1,0 +1,221 @@
+/* Reset básico */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden; /* Evitar scroll en el body */
+}
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Estilos para el contenedor principal */
+#app {
+  display: flex;
+  height: 100vh; /* Altura completa de la ventana */
+  width: 100%;
+  overflow: hidden; /* Evitar scroll en el contenedor principal */
+}
+
+/* Estilos para el menú de navegación */
+.menu {
+  width: 250px;
+  min-width: 250px; /* Evitar que se colapse */
+  background-color: #2c3e50;
+  color: white;
+  overflow-y: auto; /* Scroll independiente */
+  overflow-x: hidden;
+  height: 100vh; /* Altura completa */
+  flex-shrink: 0; /* No permitir que se encoja */
+}
+
+/* Estilos para el contenido */
+.content {
+  flex: 1;
+  padding: 30px;
+  background-color: #ecf0f1;
+  overflow-y: auto; /* Scroll independiente */
+  overflow-x: hidden;
+  height: 100vh; /* Altura completa */
+}
+
+.navigation-menu {
+  width: 100%;
+}
+
+.menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu-item {
+  margin: 0;
+}
+
+.menu-button {
+  width: 100%;
+  padding: 15px 20px;
+  background: none;
+  border: none;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+  border-left: 3px solid transparent;
+}
+
+.menu-button:hover {
+  background-color: #34495e;
+}
+
+.menu-button.active {
+  background-color: #3498db;
+  border-left-color: #2980b9;
+  font-weight: bold;
+}
+
+.content-title {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #3498db;
+  font-size: 2em;
+}
+
+.feature-container {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilos para submenús */
+.menu-item.has-children > .menu-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.menu-arrow {
+  font-size: 10px;
+  transition: transform 0.3s ease;
+  margin-left: 8px;
+}
+
+.menu-item.has-children.open > .menu-button .menu-arrow {
+  transform: rotate(180deg);
+}
+
+.submenu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  background-color: #1a252f;
+}
+
+.menu-item.has-children.open .submenu-list {
+  max-height: 500px;
+}
+
+.submenu-item {
+  margin: 0;
+}
+
+.submenu-button {
+  width: 100%;
+  padding: 12px 20px 12px 40px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.3s ease;
+  border-left: 3px solid transparent;
+  font-family: inherit;
+}
+
+.submenu-button:hover {
+  background-color: #253544;
+  color: white;
+}
+
+.submenu-button.active {
+  background-color: #2980b9;
+  border-left-color: #3498db;
+  font-weight: bold;
+  color: white;
+}
+
+.submenu-button:focus,
+.submenu-button:focus-visible {
+  outline: 2px solid #3498db;
+  outline-offset: -2px;
+}
+
+/* Scrollbar personalizado para el menú */
+.menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.menu::-webkit-scrollbar-track {
+  background: #1a252f;
+}
+
+.menu::-webkit-scrollbar-thumb {
+  background: #34495e;
+  border-radius: 4px;
+}
+
+.menu::-webkit-scrollbar-thumb:hover {
+  background: #415261;
+}
+
+/* Scrollbar personalizado para el contenido */
+.content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.content::-webkit-scrollbar-track {
+  background: #d5dce0;
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: #95a5a6;
+  border-radius: 5px;
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+  background: #7f8c8d;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #app {
+    flex-direction: column;
+  }
+  
+  .menu {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    max-height: 40vh; /* En móvil, limitar altura del menú */
+  }
+  
+  .content {
+    height: auto;
+    flex: 1;
+  }
+}

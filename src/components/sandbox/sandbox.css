@@ -1,0 +1,340 @@
+/* src/components/sandbox/sandbox.css */
+
+.code-sandbox {
+  background: #1e1e1e;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sandbox-header {
+  background: #2d2d2d;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid #3e3e3e;
+}
+
+.sandbox-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.sandbox-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #1e1e1e;
+  border-radius: 4px 4px 0 0;
+  color: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.sandbox-tab:hover {
+  background: #252526;
+}
+
+.sandbox-tab.active {
+  background: #1e1e1e;
+  color: #ffffff;
+}
+
+.tab-icon {
+  font-size: 14px;
+}
+
+.tab-name {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.copy-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #0e639c;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.copy-button:hover {
+  background: #1177bb;
+}
+
+.copy-button:active {
+  transform: scale(0.98);
+}
+
+.copy-button.copied {
+  background: #16825d;
+}
+
+.copy-icon {
+  font-size: 14px;
+}
+
+.code-editor {
+  flex: 1;
+  overflow: auto;
+  background: #1e1e1e;
+}
+
+.code-editor pre {
+  margin: 0;
+  padding: 20px;
+  background: #1e1e1e;
+}
+
+.code-editor code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  display: block;
+}
+
+/* Override highlight.js styles */
+.code-editor .hljs {
+  background: #1e1e1e !important;
+  color: #d4d4d4 !important;
+}
+
+/* Scrollbar personalizado */
+.code-editor::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.code-editor::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.code-editor::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 6px;
+}
+
+.code-editor::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+/* src/components/sandbox/sandbox.css */
+
+.code-sandbox {
+  background: #1e1e1e;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sandbox-header {
+  background: #2d2d2d;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid #3e3e3e;
+}
+
+.sandbox-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.sandbox-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.sandbox-tabs::-webkit-scrollbar-track {
+  background: #2d2d2d;
+}
+
+.sandbox-tabs::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 2px;
+}
+
+.sandbox-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #252526;
+  border-radius: 4px 4px 0 0;
+  color: #858585;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.sandbox-tab:hover {
+  background: #2d2d30;
+  color: #cccccc;
+}
+
+.sandbox-tab.active {
+  background: #1e1e1e;
+  color: #ffffff;
+  border-bottom: 2px solid #0e639c;
+}
+
+.tab-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tab-name {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.copy-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #0e639c;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.copy-button:hover {
+  background: #1177bb;
+}
+
+.copy-button:active {
+  transform: scale(0.98);
+}
+
+.copy-button.copied {
+  background: #16825d;
+}
+
+.copy-icon {
+  font-size: 14px;
+}
+
+.code-editor {
+  flex: 1;
+  overflow: auto;
+  background: #1e1e1e;
+}
+
+.code-editor pre {
+  margin: 0;
+  padding: 20px;
+  background: #1e1e1e;
+}
+
+.code-editor code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  display: block;
+}
+
+/* Override highlight.js styles */
+.code-editor .hljs {
+  background: #1e1e1e !important;
+  color: #d4d4d4 !important;
+}
+
+/* Scrollbar personalizado */
+.code-editor::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.code-editor::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.code-editor::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 6px;
+}
+
+.code-editor::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sandbox-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .sandbox-tabs {
+    margin-right: 0;
+  }
+
+  .copy-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+
+
+
+
+
+/* Agregar a src/components/sandbox/sandbox.css */
+
+.tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.tab-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.copy-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+
+.copy-icon svg {
+  width: 16px;
+  height: 16px;
+}
