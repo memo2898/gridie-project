@@ -43,6 +43,21 @@ export class Menu {
       {
         label: '1. Data Binding',
         path: '/1_DataBinding',
+        children: [
+          {
+            label: '1.1 Simple Array',
+            path: '/1_DataBinding/simple_array',
+          },
+          {
+            label: '1.2 Array Objects',
+            path: '/1_DataBinding/array_objects',
+          },
+          {
+            label: '1.3 Custom Elements HTML',
+            path: '/1_DataBinding/custom_element_html',
+          },
+          
+        ],
       },
       {
         label: '2. Filtering',
