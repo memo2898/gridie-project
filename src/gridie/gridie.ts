@@ -940,6 +940,8 @@ private renderFilterInput(
         value="${value || ''}"
         data-column-index="${columnIndex}"
         data-is-second="${isSecondInput}"
+        autocomplete="off"
+
       />
       <span 
         class="filter-clear ${hasValue ? 'visible' : ''}" 
@@ -960,7 +962,7 @@ private renderFilterInput(
 private handleFilterChange(columnIndex: number, isSecondInput: boolean = false): void {
   const header = this.headers[columnIndex];
   
-  // ✅ Usar getCurrentOperator() en lugar de buscar solo en el filtro activo
+
   const operator = this.getCurrentOperator(columnIndex);
 
   let input: HTMLInputElement | HTMLSelectElement | null;
@@ -1070,7 +1072,6 @@ private handleFilterClear(columnIndex: number, isSecondInput: boolean = false): 
 
   this.handleFilterChange(columnIndex, isSecondInput);
   
-  // ✅ SOLUCIÓN 2: Restaurar scroll después de limpiar
   setTimeout(() => {
     if (container) {
       container.scrollLeft = scrollLeft;

@@ -3,7 +3,9 @@
 export const gridieStyles = `
 .gridie-container {
   width: 100%;
+  min-height: 52vh;
   overflow-x: auto;
+  overflow-y: visible; 
   font-family: Arial, sans-serif;
 }
 
@@ -13,7 +15,7 @@ export const gridieStyles = `
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible; /* ✅ CAMBIO */
 }
 
 .gridie-table thead {
@@ -118,6 +120,7 @@ export const filterRowStyles = `
 .filter-row td {
   padding: 8px 12px;
   vertical-align: top;
+  overflow: visible; /* ✅ NUEVO */
 }
 
 .filter-cell {
@@ -134,7 +137,7 @@ export const filterRowStyles = `
   width: 100%;
 }
 
-/* ✅ AJUSTADO: Custom Dropdown para operadores */
+/* Dropdown para operadores */
 .filter-operator-dropdown {
   position: relative;
   flex-shrink: 0;
@@ -188,7 +191,7 @@ export const filterRowStyles = `
   min-width: 200px;
   max-height: 250px;
   overflow-y: auto;
-  z-index: 1000;
+  z-index: 1000; /* ✅ ASEGURA que esté por encima */
   display: none;
 }
 
@@ -284,7 +287,6 @@ export const filterRowStyles = `
   background: #f0f0f0;
 }
 
-/* Estilos para between */
 .filter-between-container {
   display: flex;
   flex-direction: column;
