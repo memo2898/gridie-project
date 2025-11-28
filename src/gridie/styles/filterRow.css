@@ -1,0 +1,103 @@
+/* src/gridie/styles/filterRow.css */
+
+.filter-row {
+  background: #f9fafb;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.filter-row td {
+  padding: 8px 12px;
+  vertical-align: top;
+}
+
+.filter-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.filter-cell-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.filter-operator {
+  min-width: 110px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: border-color 0.2s;
+}
+
+.filter-operator:hover {
+  border-color: #667eea;
+}
+
+.filter-operator:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.filter-input-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-input,
+.filter-select {
+  flex: 1;
+  padding: 6px 28px 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85em;
+  transition: border-color 0.2s;
+}
+
+.filter-input:focus,
+.filter-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.filter-input::placeholder {
+  color: #999;
+}
+
+.filter-clear {
+  position: absolute;
+  right: 8px;
+  cursor: pointer;
+  color: #999;
+  font-size: 1em;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.2s;
+  user-select: none;
+  display: none;
+}
+
+.filter-input-wrapper:hover .filter-clear,
+.filter-clear.visible {
+  display: block;
+}
+
+.filter-clear:hover {
+  color: #666;
+  background: #f0f0f0;
+}
+
+/* Para el caso "between" - segundo input */
+.filter-cell-row.between-second {
+  margin-left: 116px; /* Ancho del operator + gap */
+}

@@ -1,5 +1,5 @@
 // src/gridie/gridie.ts
-//Ultimos cambios de gridie donde faltan ajustar
+//Version en la que el sort funcionaba correctamente
 import { SortingManager } from './sortingFunctions';
 import type { SortDirection } from './sortingFunctions';
 import { FilteringManager } from './filteringFunctions';
@@ -10,7 +10,7 @@ import { gridieStyles, contextMenuStyles, filterRowStyles } from './styles';
 
 export interface GridieFilterRowConfig {
   visible: boolean;
-   operators?: readonly FilterOperator[] | FilterOperator[];
+  operators?: FilterOperator[];
 }
 
 export interface GridieFiltersConfig {
@@ -366,163 +366,13 @@ export class Gridie extends HTMLElement {
     this.applyFiltersAndSorting();
   }
 
-private applyFiltersAndSorting(): void {
-  // Primero aplicar filtros
-  this._filteredBody = this._filteringManager.applyFilters(this._originalBody, this.headers);
-  // Luego aplicar sorting sobre los datos filtrados
-  this._body = this._sortingManager.applySorts(this._filteredBody, this.headers);
-  
-  // ✅ FIX: Actualizar tanto tbody como thead (para sort indicators)
-  this.updateTableContent();
-}
-
-private updateTableContent(): void {
-  // Actualizar thead (sort indicators)
-  const thead = this.shadow.querySelector('thead tr:first-child');
-  if (thead) {
-    const headers = this.headers;
-    thead.innerHTML = headers.map((header, index) => `
-      <th 
-        class="${header.sortable ? 'sortable' : ''}" 
-        data-column-index="${index}"
-      >
-        ${header.label}${this.getSortIndicator(index)}
-      </th>
-    `).join('');
-    
-    // Re-attach header events después de actualizar
-    this.attachHeaderEvents();
+  private applyFiltersAndSorting(): void {
+    // Primero aplicar filtros
+    this._filteredBody = this._filteringManager.applyFilters(this._originalBody, this.headers);
+    // Luego aplicar sorting sobre los datos filtrados
+    this._body = this._sortingManager.applySorts(this._filteredBody, this.headers);
+    this.render();
   }
-  
-  // Actualizar tbody
-  this.renderTableBody();
-}
-
-
-private renderTableBody(): void {
-  const tbody = this.shadow.querySelector('tbody');
-  if (!tbody) {
-    this.render(); // Fallback si no existe tbody
-    return;
-  }
-
-  const headers = this.headers;
-  const body = this.body;
-
-  tbody.innerHTML = body.length > 0 
-    ? body.map((row, rowIndex) => `
-        <tr data-index="${rowIndex}">
-          ${headers.map((header, colIndex) => 
-            `<td>${this.renderCell(row, header, colIndex, rowIndex)}</td>`
-          ).join('')}
-        </tr>
-      `).join('')
-    : `<tr><td colspan="${headers.length}" class="no-data">${this._lang.table.noData}</td></tr>`;
-
-  this.attachActionEvents();
-}
-
-// Reemplaza este método en gridie.ts:
-
-private handleOperatorChange(columnIndex: number): void {
-  // Guardar scroll
-  const container = this.shadow.querySelector('.gridie-container') as HTMLElement;
-  const scrollLeft = container?.scrollLeft || 0;
-  const scrollTop = container?.scrollTop || 0;
-  
-  const operatorSelect = this.shadow.querySelector(
-    `select.filter-operator[data-column-index="${columnIndex}"]`
-  ) as HTMLSelectElement;
-  
-  if (!operatorSelect) return;
-  
-  const newOperator = operatorSelect.value as FilterOperator;
-  
-  // Obtener el filtro actual ANTES de cambiar
-  const currentFilter = this._filteringManager.getColumnFilter(columnIndex);
-  const oldOperator = currentFilter?.operator || this.getOperatorsForColumn(this.headers[columnIndex])[0];
-  
-  // ✅ CRITICAL: Detectar si cambió entre "between" y otro operador
-  const wasBetween = oldOperator === 'between';
-  const isNowBetween = newOperator === 'between';
-  
-  // ✅ CRITICAL: Si cambió el layout, re-renderizar INMEDIATAMENTE antes de aplicar filtro
-  if (wasBetween !== isNowBetween) {
-    // Actualizar el operador en el manager primero (sin valor aún)
-    if (isNowBetween) {
-      this._filteringManager.addFilter(columnIndex, newOperator, '', '');
-    }
-    
-    // Re-renderizar la fila de filtros
-    this.renderFilterRowOnly();
-    this.attachFilterEvents();
-    
-    // Restaurar scroll y foco
-    setTimeout(() => {
-      if (container) {
-        container.scrollLeft = scrollLeft;
-        container.scrollTop = scrollTop;
-      }
-      
-      const newSelect = this.shadow.querySelector(
-        `select.filter-operator[data-column-index="${columnIndex}"]`
-      ) as HTMLSelectElement;
-      if (newSelect) {
-        newSelect.focus();
-      }
-    }, 0);
-    
-    return; // ← Salir aquí, no aplicar filtro todavía
-  }
-  
-  // Si no cambió el layout, aplicar el filtro normalmente
-  this.handleFilterChange(columnIndex, false);
-}
-
-private renderFilterRowOnly(): void {
-  const filterRow = this.shadow.querySelector('.filter-row');
-  if (!filterRow) return;
-
-  const headers = this.headers;
-  
-  filterRow.innerHTML = headers.map((header, index) => {
-    if (!header.filters?.filterRow?.visible) {
-      return `<td></td>`;
-    }
-
-    const operators = this.getOperatorsForColumn(header);
-    const currentFilter = this._filteringManager.getColumnFilter(index);
-    const currentOperator = currentFilter?.operator || operators[0];
-    const currentValue = currentFilter?.value || '';
-    const currentValue2 = currentFilter?.value2 || '';
-
-    return `
-      <td>
-        <div class="filter-cell">
-          <div class="filter-cell-row">
-            <select 
-              class="filter-operator" 
-              data-column-index="${index}"
-            >
-              ${operators.map(op => `
-                <option value="${op}" ${op === currentOperator ? 'selected' : ''}>
-                  ${this._lang.filtering.operators[op]}
-                </option>
-              `).join('')}
-            </select>
-            ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
-          </div>
-          ${currentOperator === 'between' ? `
-            <div class="filter-cell-row between-second">
-              ${this.renderFilterInput(header, index, currentOperator, currentValue2, true)}
-            </div>
-          ` : ''}
-        </div>
-      </td>
-    `;
-  }).join('');
-}
-
 
   private getSortIndicator(columnIndex: number): string {
     const sortState = this._sortingManager.getColumnSort(columnIndex);
@@ -554,12 +404,13 @@ private renderFilterRowOnly(): void {
     }
   }
 
- private getOperatorsForColumn(header: GridieHeaderConfig): FilterOperator[] {
-  if (header.filters?.filterRow?.operators) {
-    return [...header.filters.filterRow.operators]; // ← Crea una copia
+  private getOperatorsForColumn(header: GridieHeaderConfig): FilterOperator[] {
+    if (header.filters?.filterRow?.operators) {
+      return header.filters.filterRow.operators;
+    }
+    return this.getDefaultOperators(header.type || 'string');
   }
-  return this.getDefaultOperators(header.type || 'string');
-}
+
   private renderFilterRow(): string {
     if (!this.hasFilterRow()) return '';
 
@@ -607,7 +458,6 @@ private renderFilterRowOnly(): void {
     `;
   }
 
-
 private renderFilterInput(
   header: GridieHeaderConfig, 
   columnIndex: number, 
@@ -643,15 +493,12 @@ private renderFilterInput(
     `;
   }
 
-  // ✅ SOLUCIÓN 3: Para números usar type="text" y validar manualmente
   let inputType = 'text';
-  let placeholder: string = this._lang.filtering.placeholders.string;
-  let inputMode = '';
+  let placeholder: string = this._lang.filtering.placeholders.string; // ← Agrega ': string'
 
   switch (header.type) {
     case 'number':
-      inputType = 'text'; // Cambiado de 'number' a 'text'
-      inputMode = 'inputmode="decimal"'; // Sugerencia para teclado móvil
+      inputType = 'number';
       placeholder = this._lang.filtering.placeholders.number;
       break;
     case 'date':
@@ -664,7 +511,6 @@ private renderFilterInput(
     <div class="filter-input-wrapper">
       <input 
         type="${inputType}"
-        ${inputMode}
         class="filter-input"
         id="${inputId}"
         placeholder="${placeholder}"
@@ -680,182 +526,117 @@ private renderFilterInput(
     </div>
   `;
 }
- 
 
-
-
-
-
-
-
-private handleFilterChange(columnIndex: number, isSecondInput: boolean = false): void {
-  const header = this.headers[columnIndex];
-  const operatorSelect = this.shadow.querySelector(
-    `select.filter-operator[data-column-index="${columnIndex}"]`
-  ) as HTMLSelectElement;
-  
-  if (!operatorSelect) return;
-  
-  const operator = operatorSelect.value as FilterOperator;
-
-  let input: HTMLInputElement | HTMLSelectElement | null;
-  
-  if (header.type === 'boolean') {
-    input = this.shadow.querySelector(
-      `select.filter-select[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
+  private handleFilterChange(columnIndex: number, isSecondInput: boolean = false): void {
+    const header = this.headers[columnIndex];
+    const operatorSelect = this.shadow.querySelector(
+      `select.filter-operator[data-column-index="${columnIndex}"]`
     ) as HTMLSelectElement;
-  } else {
-    input = this.shadow.querySelector(
-      `input.filter-input[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
-    ) as HTMLInputElement;
-  }
+    
+    const operator = operatorSelect?.value as FilterOperator;
 
-  if (!input) return;
+    let input: HTMLInputElement | HTMLSelectElement | null;
+    
+    if (header.type === 'boolean') {
+      input = this.shadow.querySelector(
+        `select.filter-select[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
+      ) as HTMLSelectElement;
+    } else {
+      input = this.shadow.querySelector(
+        `input.filter-input[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
+      ) as HTMLInputElement;
+    }
 
-  const value = input.value;
+    if (!input || !operatorSelect) return;
 
-  if (operator === 'between') {
-    const input1 = this.shadow.querySelector(
-      `input.filter-input[data-column-index="${columnIndex}"][data-is-second="false"]`
-    ) as HTMLInputElement;
-    const input2 = this.shadow.querySelector(
-      `input.filter-input[data-column-index="${columnIndex}"][data-is-second="true"]`
-    ) as HTMLInputElement;
+    const value = input.value;
 
-    if (input1 && input2) {
-      const value1 = input1.value;
-      const value2 = input2.value;
+    if (operator === 'between') {
+      const input1 = this.shadow.querySelector(
+        `input.filter-input[data-column-index="${columnIndex}"][data-is-second="false"]`
+      ) as HTMLInputElement;
+      const input2 = this.shadow.querySelector(
+        `input.filter-input[data-column-index="${columnIndex}"][data-is-second="true"]`
+      ) as HTMLInputElement;
 
-      if (value1 || value2) {
-        this._filteringManager.addFilter(columnIndex, operator, value1, value2);
+      if (input1 && input2) {
+        const value1 = input1.value;
+        const value2 = input2.value;
+
+        if (value1 || value2) {
+          this._filteringManager.addFilter(columnIndex, operator, value1, value2);
+        } else {
+          this._filteringManager.clearFilterValue(columnIndex);
+        }
+      }
+    } else {
+      if (value) {
+        this._filteringManager.addFilter(columnIndex, operator, value);
       } else {
         this._filteringManager.clearFilterValue(columnIndex);
       }
     }
-  } else {
-    if (value) {
-      this._filteringManager.addFilter(columnIndex, operator, value);
+
+    this.applyFiltersAndSorting();
+  }
+
+  private handleFilterClear(columnIndex: number, isSecondInput: boolean = false): void {
+    const header = this.headers[columnIndex];
+    
+    if (header.type === 'boolean') {
+      const select = this.shadow.querySelector(
+        `select.filter-select[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
+      ) as HTMLSelectElement;
+      if (select) select.value = '';
     } else {
-      this._filteringManager.clearFilterValue(columnIndex);
+      const input = this.shadow.querySelector(
+        `input.filter-input[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
+      ) as HTMLInputElement;
+      if (input) input.value = '';
     }
+
+    this.handleFilterChange(columnIndex, isSecondInput);
   }
 
-  this.applyFiltersAndSorting();
-  
-  // ✅ Restaurar foco y posición de scroll
-  this.restoreFocusAndScroll(input);
-}
+  private attachFilterEvents(): void {
+    // Operator change
+    this.shadow.querySelectorAll('select.filter-operator').forEach(select => {
+      const columnIndex = parseInt((select as HTMLElement).dataset.columnIndex!);
+      select.addEventListener('change', () => {
+        this.handleFilterChange(columnIndex);
+      });
+    });
 
-private restoreFocusAndScroll(previousInput: HTMLElement): void {
-  const container = this.shadow.querySelector('.gridie-container') as HTMLElement;
-  const scrollLeft = container?.scrollLeft || 0;
-  const scrollTop = container?.scrollTop || 0;
-  
-  // Restaurar después del re-render
-  setTimeout(() => {
-    // Restaurar scroll
-    if (container) {
-      container.scrollLeft = scrollLeft;
-      container.scrollTop = scrollTop;
-    }
-    
-    // Restaurar foco
-    const columnIndex = previousInput.dataset.columnIndex;
-    const isSecond = previousInput.dataset.isSecond;
-    
-    if (columnIndex) {
-      const selector = previousInput.classList.contains('filter-select')
-        ? `select.filter-select[data-column-index="${columnIndex}"][data-is-second="${isSecond}"]`
-        : `input.filter-input[data-column-index="${columnIndex}"][data-is-second="${isSecond}"]`;
+    // Input change (text, number, date)
+    this.shadow.querySelectorAll('input.filter-input').forEach(input => {
+      const columnIndex = parseInt((input as HTMLElement).dataset.columnIndex!);
+      const isSecond = (input as HTMLElement).dataset.isSecond === 'true';
       
-      const newInput = this.shadow.querySelector(selector) as HTMLInputElement | HTMLSelectElement;
-      if (newInput) {
-        newInput.focus();
-        
-        // Restaurar posición del cursor en inputs de texto
-        if (newInput instanceof HTMLInputElement && newInput.type === 'text') {
-          const cursorPos = newInput.value.length;
-          newInput.setSelectionRange(cursorPos, cursorPos);
-        }
-      }
-    }
-  }, 0);
-}
+      input.addEventListener('input', () => {
+        this.handleFilterChange(columnIndex, isSecond);
+      });
+    });
 
+    // Select change (boolean)
+    this.shadow.querySelectorAll('select.filter-select').forEach(select => {
+      const columnIndex = parseInt((select as HTMLElement).dataset.columnIndex!);
+      const isSecond = (select as HTMLElement).dataset.isSecond === 'true';
+      
+      select.addEventListener('change', () => {
+        this.handleFilterChange(columnIndex, isSecond);
+      });
+    });
 
-private handleFilterClear(columnIndex: number, isSecondInput: boolean = false): void {
-  const header = this.headers[columnIndex];
-  
-  // Guardar posición de scroll antes de limpiar
-  const container = this.shadow.querySelector('.gridie-container') as HTMLElement;
-  const scrollLeft = container?.scrollLeft || 0;
-  const scrollTop = container?.scrollTop || 0;
-  
-  if (header.type === 'boolean') {
-    const select = this.shadow.querySelector(
-      `select.filter-select[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
-    ) as HTMLSelectElement;
-    if (select) select.value = '';
-  } else {
-    const input = this.shadow.querySelector(
-      `input.filter-input[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
-    ) as HTMLInputElement;
-    if (input) input.value = '';
+    // Clear buttons
+    this.shadow.querySelectorAll('span.filter-clear').forEach(clearBtn => {
+      const columnIndex = parseInt((clearBtn as HTMLElement).dataset.columnIndex!);
+      const isSecond = (clearBtn as HTMLElement).dataset.isSecond === 'true';
+      
+      clearBtn.addEventListener('click', () => {
+        this.handleFilterClear(columnIndex, isSecond);
+      });
+    });
   }
-
-  this.handleFilterChange(columnIndex, isSecondInput);
-  
-  // ✅ SOLUCIÓN 2: Restaurar scroll después de limpiar
-  setTimeout(() => {
-    if (container) {
-      container.scrollLeft = scrollLeft;
-      container.scrollTop = scrollTop;
-    }
-  }, 0);
-}
-
-
-
-
-private attachFilterEvents(): void {
-  // Operator change - ✅ AHORA LLAMA A handleOperatorChange
-  this.shadow.querySelectorAll('select.filter-operator').forEach(select => {
-    const columnIndex = parseInt((select as HTMLElement).dataset.columnIndex!);
-    select.addEventListener('change', () => {
-      this.handleOperatorChange(columnIndex);
-    });
-  });
-
-  // Input change (text, number, date)
-  this.shadow.querySelectorAll('input.filter-input').forEach(input => {
-    const columnIndex = parseInt((input as HTMLElement).dataset.columnIndex!);
-    const isSecond = (input as HTMLElement).dataset.isSecond === 'true';
-    
-    input.addEventListener('input', () => {
-      this.handleFilterChange(columnIndex, isSecond);
-    });
-  });
-
-  // Select change (boolean)
-  this.shadow.querySelectorAll('select.filter-select').forEach(select => {
-    const columnIndex = parseInt((select as HTMLElement).dataset.columnIndex!);
-    const isSecond = (select as HTMLElement).dataset.isSecond === 'true';
-    
-    select.addEventListener('change', () => {
-      this.handleFilterChange(columnIndex, isSecond);
-    });
-  });
-
-  // Clear buttons
-  this.shadow.querySelectorAll('span.filter-clear').forEach(clearBtn => {
-    const columnIndex = parseInt((clearBtn as HTMLElement).dataset.columnIndex!);
-    const isSecond = (clearBtn as HTMLElement).dataset.isSecond === 'true';
-    
-    clearBtn.addEventListener('click', () => {
-      this.handleFilterClear(columnIndex, isSecond);
-    });
-  });
-}
 
   // ============= END FILTER ROW METHODS =============
 
