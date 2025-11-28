@@ -7,6 +7,7 @@ import type { FilterOperator } from './filteringFunctions';
 import { getLanguage } from './lang';
 import type { Language, LanguageStrings } from './lang';
 import { gridieStyles, contextMenuStyles, filterRowStyles } from './styles';
+import { getFilterIcon } from './assets/icons/filters';
 
 export interface GridieFilterRowConfig {
   visible: boolean;
@@ -44,7 +45,7 @@ export interface GridieConfig {
 }
 
 export class Gridie extends HTMLElement {
-  private shadow: ShadowRoot;
+    private shadow: ShadowRoot;
   private _id: string = '';
   private _headers: (string | GridieHeaderConfig)[] = [];
   private _body: any[] = [];
@@ -58,6 +59,9 @@ export class Gridie extends HTMLElement {
   private _lang: LanguageStrings;
   private _contextMenu: HTMLDivElement | null = null;
   private _globalStyleId = 'gridie-global-styles';
+  private _activeOperatorDropdown: number | null = null;
+  private _selectedOperators: Map<number, FilterOperator> = new Map(); 
+
 
   constructor(config?: GridieConfig) {
     super();
@@ -123,33 +127,35 @@ export class Gridie extends HTMLElement {
   }
 
   setConfig(config: GridieConfig) {
-    this._id = config.id;
-    this._headers = config.headers;
-    this._body = config.body;
-    this._originalBody = [...config.body];
-    this._filteredBody = [...config.body];
-    this._language = config.language || 'es';
-    this._lang = getLanguage(this._language);
-    this._config = {
-      enableSort: config.enableSort ?? true,
-      enableFilter: config.enableFilter ?? false,
-      enablePagination: config.enablePagination ?? false,
-      language: this._language,
-    };
-    this._sortingManager.clearAll();
-    this._filteringManager.clearAll();
-    this.render();
-  }
+  this._id = config.id;
+  this._headers = config.headers;
+  this._body = config.body;
+  this._originalBody = [...config.body];
+  this._filteredBody = [...config.body];
+  this._language = config.language || 'es';
+  this._lang = getLanguage(this._language);
+  this._config = {
+    enableSort: config.enableSort ?? true,
+    enableFilter: config.enableFilter ?? false,
+    enablePagination: config.enablePagination ?? false,
+    language: this._language,
+  };
+  this._sortingManager.clearAll();
+  this._filteringManager.clearAll();
+  this._selectedOperators.clear(); 
+  this.render();
+}
 
-  setData(config: { headers: (string | GridieHeaderConfig)[], data: any[] }) {
-    this._headers = config.headers;
-    this._body = config.data;
-    this._originalBody = [...config.data];
-    this._filteredBody = [...config.data];
-    this._sortingManager.clearAll();
-    this._filteringManager.clearAll();
-    this.render();
-  }
+setData(config: { headers: (string | GridieHeaderConfig)[], data: any[] }) {
+  this._headers = config.headers;
+  this._body = config.data;
+  this._originalBody = [...config.data];
+  this._filteredBody = [...config.data];
+  this._sortingManager.clearAll();
+  this._filteringManager.clearAll();
+  this._selectedOperators.clear(); 
+  this.render();
+}
 
   addRow(row: any) {
     this._originalBody.push(row);
@@ -192,6 +198,26 @@ export class Gridie extends HTMLElement {
     return this._body.length > 0 ? this._body : [];
   }
 
+
+
+private getCurrentOperator(columnIndex: number): FilterOperator {
+  const header = this.headers[columnIndex];
+  
+  // Primero intentar obtenerlo del filtro activo
+  const currentFilter = this._filteringManager.getColumnFilter(columnIndex);
+  if (currentFilter) {
+    return currentFilter.operator;
+  }
+  
+  // Si no hay filtro activo, buscar en los operadores seleccionados
+  const selectedOperator = this._selectedOperators.get(columnIndex);
+  if (selectedOperator) {
+    return selectedOperator;
+  }
+  
+  // Si no hay nada, usar el primer operador por defecto
+  return this.getOperatorsForColumn(header)[0];
+}
   private getAttributeHeaders(): (string | GridieHeaderConfig)[] {
     try {
       const headersAttr = this.getAttribute("headers");
@@ -341,12 +367,7 @@ export class Gridie extends HTMLElement {
     }
   }
 
-  private handleDocumentClick(event: Event): void {
-    const target = event.target as HTMLElement;
-    if (this._contextMenu && !this._contextMenu.contains(target)) {
-      this.hideContextMenu();
-    }
-  }
+  
 
   private handleContextMenuAction(action: string, columnIndex: number): void {
     switch (action) {
@@ -492,7 +513,6 @@ private handleOperatorChange(columnIndex: number): void {
   // Si no cambió el layout, aplicar el filtro normalmente
   this.handleFilterChange(columnIndex, false);
 }
-
 private renderFilterRowOnly(): void {
   const filterRow = this.shadow.querySelector('.filter-row');
   if (!filterRow) return;
@@ -506,26 +526,17 @@ private renderFilterRowOnly(): void {
 
     const operators = this.getOperatorsForColumn(header);
     const currentFilter = this._filteringManager.getColumnFilter(index);
-    const currentOperator = currentFilter?.operator || operators[0];
+    const currentOperator = this.getCurrentOperator(index);
     const currentValue = currentFilter?.value || '';
     const currentValue2 = currentFilter?.value2 || '';
 
-    // ✅ Layout especial para "between"
+    // Layout especial para "between"
     if (currentOperator === 'between') {
       return `
         <td>
           <div class="filter-cell">
             <div class="filter-cell-row">
-              <select 
-                class="filter-operator" 
-                data-column-index="${index}"
-              >
-                ${operators.map(op => `
-                  <option value="${op}" ${op === currentOperator ? 'selected' : ''}>
-                    ${this._lang.filtering.operators[op]}
-                  </option>
-                `).join('')}
-              </select>
+              ${this.renderOperatorDropdown(index, operators, currentOperator)}
               <div class="filter-between-container">
                 <div class="filter-between-row">
                   <span class="filter-between-label">${this._lang.filtering.placeholders.betweenFrom}</span>
@@ -547,16 +558,7 @@ private renderFilterRowOnly(): void {
       <td>
         <div class="filter-cell">
           <div class="filter-cell-row">
-            <select 
-              class="filter-operator" 
-              data-column-index="${index}"
-            >
-              ${operators.map(op => `
-                <option value="${op}" ${op === currentOperator ? 'selected' : ''}>
-                  ${this._lang.filtering.operators[op]}
-                </option>
-              `).join('')}
-            </select>
+            ${this.renderOperatorDropdown(index, operators, currentOperator)}
             ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
           </div>
         </div>
@@ -565,6 +567,192 @@ private renderFilterRowOnly(): void {
   }).join('');
 }
 
+
+private toggleOperatorDropdown(columnIndex: number): void {
+  if (this._activeOperatorDropdown === columnIndex) {
+    this.closeOperatorDropdown();
+  } else {
+    this.openOperatorDropdown(columnIndex);
+  }
+}
+
+private openOperatorDropdown(columnIndex: number): void {
+  // Cerrar cualquier dropdown abierto
+  this.closeOperatorDropdown();
+  
+  this._activeOperatorDropdown = columnIndex;
+  
+  const trigger = this.shadow.querySelector(
+    `.filter-operator-trigger[data-column-index="${columnIndex}"]`
+  ) as HTMLElement;
+  const menu = this.shadow.querySelector(
+    `.filter-operator-menu[data-column-index="${columnIndex}"]`
+  ) as HTMLElement;
+  
+  if (trigger && menu) {
+    trigger.classList.add('active');
+    menu.classList.add('active');
+  }
+}
+
+private closeOperatorDropdown(): void {
+  if (this._activeOperatorDropdown === null) return;
+  
+  const trigger = this.shadow.querySelector(
+    `.filter-operator-trigger[data-column-index="${this._activeOperatorDropdown}"]`
+  ) as HTMLElement;
+  const menu = this.shadow.querySelector(
+    `.filter-operator-menu[data-column-index="${this._activeOperatorDropdown}"]`
+  ) as HTMLElement;
+  
+  if (trigger && menu) {
+    trigger.classList.remove('active');
+    menu.classList.remove('active');
+  }
+  
+  this._activeOperatorDropdown = null;
+}
+
+
+
+private handleOperatorSelect(columnIndex: number, newOperator: FilterOperator): void {
+  this.closeOperatorDropdown();
+  
+  // Guardar scroll
+  const container = this.shadow.querySelector('.gridie-container') as HTMLElement;
+  const scrollLeft = container?.scrollLeft || 0;
+  const scrollTop = container?.scrollTop || 0;
+  
+  // Obtener el operador actual
+  const oldOperator = this.getCurrentOperator(columnIndex);
+  
+  // Si no cambió, no hacer nada
+  if (oldOperator === newOperator) return;
+  
+  // ✅ SIEMPRE guardar el operador seleccionado
+  this._selectedOperators.set(columnIndex, newOperator);
+  
+  const currentFilter = this._filteringManager.getColumnFilter(columnIndex);
+  const wasBetween = oldOperator === 'between';
+  const isNowBetween = newOperator === 'between';
+  const currentValue = currentFilter?.value || '';
+  const currentValue2 = currentFilter?.value2 || '';
+  
+  // Actualizar el filtro en el manager solo si hay valor
+  if (isNowBetween) {
+    // Cambió A "between" - inicializar con valores vacíos si no hay filtro
+    if (!currentFilter) {
+      // No agregamos al manager aún, solo guardamos la selección
+    } else {
+      this._filteringManager.addFilter(columnIndex, newOperator, '', '');
+    }
+  } else if (wasBetween) {
+    // Cambió DESDE "between" - mantener primer valor si existe
+    if (currentValue) {
+      this._filteringManager.addFilter(columnIndex, newOperator, currentValue);
+    } else {
+      this._filteringManager.clearFilterValue(columnIndex);
+    }
+  } else {
+    // Cambió entre operadores normales - mantener valor si existe
+    if (currentValue) {
+      this._filteringManager.addFilter(columnIndex, newOperator, currentValue, currentValue2);
+    }
+    // Si no hay valor, no hacemos nada en el manager (ya guardamos en _selectedOperators)
+  }
+  
+  // ✅ CRÍTICO: SIEMPRE re-renderizar para actualizar el icono
+  this.renderFilterRowOnly();
+  this.attachFilterEvents();
+  
+  // Solo aplicar filtros si hay valor
+  if (currentValue) {
+    this.applyFiltersAndSorting();
+  }
+  
+  // Restaurar scroll
+  setTimeout(() => {
+    if (container) {
+      container.scrollLeft = scrollLeft;
+      container.scrollTop = scrollTop;
+    }
+  }, 0);
+}
+
+private handleDocumentClick(event: Event): void {
+  const target = event.target as HTMLElement;
+  
+  // Cerrar context menu
+  if (this._contextMenu && !this._contextMenu.contains(target)) {
+    this.hideContextMenu();
+  }
+  
+  // ✅ NUEVO: Cerrar operator dropdown si se hace clic fuera
+  if (this._activeOperatorDropdown !== null) {
+    const dropdown = this.shadow.querySelector(
+      `.filter-operator-dropdown[data-column-index="${this._activeOperatorDropdown}"]`
+    );
+    if (dropdown && !dropdown.contains(target)) {
+      this.closeOperatorDropdown();
+    }
+  }
+}
+
+
+
+
+// Actualiza attachFilterEvents():...
+private attachFilterEvents(): void {
+  // ✅ NUEVO: Dropdown triggers
+  this.shadow.querySelectorAll('.filter-operator-trigger').forEach(trigger => {
+    const columnIndex = parseInt((trigger as HTMLElement).dataset.columnIndex!);
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleOperatorDropdown(columnIndex);
+    });
+  });
+
+  // ✅ NUEVO: Dropdown options
+  this.shadow.querySelectorAll('.filter-operator-option').forEach(option => {
+    const columnIndex = parseInt((option as HTMLElement).dataset.columnIndex!);
+    const operator = (option as HTMLElement).dataset.operator as FilterOperator;
+    
+    option.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handleOperatorSelect(columnIndex, operator);
+    });
+  });
+
+  // Input change (text, number, date)
+  this.shadow.querySelectorAll('input.filter-input').forEach(input => {
+    const columnIndex = parseInt((input as HTMLElement).dataset.columnIndex!);
+    const isSecond = (input as HTMLElement).dataset.isSecond === 'true';
+    
+    input.addEventListener('input', () => {
+      this.handleFilterChange(columnIndex, isSecond);
+    });
+  });
+
+  // Select change (boolean)
+  this.shadow.querySelectorAll('select.filter-select').forEach(select => {
+    const columnIndex = parseInt((select as HTMLElement).dataset.columnIndex!);
+    const isSecond = (select as HTMLElement).dataset.isSecond === 'true';
+    
+    select.addEventListener('change', () => {
+      this.handleFilterChange(columnIndex, isSecond);
+    });
+  });
+
+  // Clear buttons
+  this.shadow.querySelectorAll('span.filter-clear').forEach(clearBtn => {
+    const columnIndex = parseInt((clearBtn as HTMLElement).dataset.columnIndex!);
+    const isSecond = (clearBtn as HTMLElement).dataset.isSecond === 'true';
+    
+    clearBtn.addEventListener('click', () => {
+      this.handleFilterClear(columnIndex, isSecond);
+    });
+  });
+}
 
 
   private getSortIndicator(columnIndex: number): string {
@@ -603,7 +791,7 @@ private renderFilterRowOnly(): void {
   }
   return this.getDefaultOperators(header.type || 'string');
 }
- private renderFilterRow(): string {
+private renderFilterRow(): string {
   if (!this.hasFilterRow()) return '';
 
   const headers = this.headers;
@@ -617,26 +805,17 @@ private renderFilterRowOnly(): void {
 
         const operators = this.getOperatorsForColumn(header);
         const currentFilter = this._filteringManager.getColumnFilter(index);
-        const currentOperator = currentFilter?.operator || operators[0];
+        const currentOperator = this.getCurrentOperator(index);
         const currentValue = currentFilter?.value || '';
         const currentValue2 = currentFilter?.value2 || '';
 
-        // ✅ Layout especial para "between"
+        // Layout especial para "between"
         if (currentOperator === 'between') {
           return `
             <td>
               <div class="filter-cell">
                 <div class="filter-cell-row">
-                  <select 
-                    class="filter-operator" 
-                    data-column-index="${index}"
-                  >
-                    ${operators.map(op => `
-                      <option value="${op}" ${op === currentOperator ? 'selected' : ''}>
-                        ${this._lang.filtering.operators[op]}
-                      </option>
-                    `).join('')}
-                  </select>
+                  ${this.renderOperatorDropdown(index, operators, currentOperator)}
                   <div class="filter-between-container">
                     <div class="filter-between-row">
                       <span class="filter-between-label">${this._lang.filtering.placeholders.betweenFrom}</span>
@@ -658,16 +837,7 @@ private renderFilterRowOnly(): void {
           <td>
             <div class="filter-cell">
               <div class="filter-cell-row">
-                <select 
-                  class="filter-operator" 
-                  data-column-index="${index}"
-                >
-                  ${operators.map(op => `
-                    <option value="${op}" ${op === currentOperator ? 'selected' : ''}>
-                      ${this._lang.filtering.operators[op]}
-                    </option>
-                  `).join('')}
-                </select>
+                ${this.renderOperatorDropdown(index, operators, currentOperator)}
                 ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
               </div>
             </div>
@@ -675,6 +845,33 @@ private renderFilterRowOnly(): void {
         `;
       }).join('')}
     </tr>
+  `;
+}
+private renderOperatorDropdown(
+  columnIndex: number, 
+  operators: FilterOperator[], 
+  currentOperator: FilterOperator
+): string {
+  const isActive = this._activeOperatorDropdown === columnIndex;
+  
+  return `
+    <div class="filter-operator-dropdown" data-column-index="${columnIndex}">
+      <div class="filter-operator-trigger ${isActive ? 'active' : ''}" data-column-index="${columnIndex}">
+        <span class="filter-operator-icon">${getFilterIcon(currentOperator)}</span>
+      </div>
+      <div class="filter-operator-menu ${isActive ? 'active' : ''}" data-column-index="${columnIndex}">
+        ${operators.map(op => `
+          <div 
+            class="filter-operator-option ${op === currentOperator ? 'selected' : ''}" 
+            data-operator="${op}"
+            data-column-index="${columnIndex}"
+          >
+            <span class="filter-operator-icon">${getFilterIcon(op)}</span>
+            <span class="filter-operator-text">${this._lang.filtering.operators[op]}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
   `;
 }
 
@@ -714,7 +911,7 @@ private renderFilterInput(
     `;
   }
 
-  // ✅ SOLUCIÓN 3: Para números usar type="text" y validar manualmente
+ 
   let inputType = 'text';
   let placeholder: string = this._lang.filtering.placeholders.string;
   let inputMode = '';
@@ -726,6 +923,7 @@ private renderFilterInput(
       placeholder = this._lang.filtering.placeholders.number;
       break;
     case 'date':
+
       inputType = 'date';
       placeholder = this._lang.filtering.placeholders.date;
       break;
@@ -761,13 +959,9 @@ private renderFilterInput(
 
 private handleFilterChange(columnIndex: number, isSecondInput: boolean = false): void {
   const header = this.headers[columnIndex];
-  const operatorSelect = this.shadow.querySelector(
-    `select.filter-operator[data-column-index="${columnIndex}"]`
-  ) as HTMLSelectElement;
   
-  if (!operatorSelect) return;
-  
-  const operator = operatorSelect.value as FilterOperator;
+  // ✅ Usar getCurrentOperator() en lugar de buscar solo en el filtro activo
+  const operator = this.getCurrentOperator(columnIndex);
 
   let input: HTMLInputElement | HTMLSelectElement | null;
   
@@ -813,7 +1007,7 @@ private handleFilterChange(columnIndex: number, isSecondInput: boolean = false):
 
   this.applyFiltersAndSorting();
   
-  // ✅ Restaurar foco y posición de scroll
+  // Restaurar foco y posición de scroll
   this.restoreFocusAndScroll(input);
 }
 
@@ -888,45 +1082,7 @@ private handleFilterClear(columnIndex: number, isSecondInput: boolean = false): 
 
 
 
-private attachFilterEvents(): void {
-  // Operator change - ✅ AHORA LLAMA A handleOperatorChange
-  this.shadow.querySelectorAll('select.filter-operator').forEach(select => {
-    const columnIndex = parseInt((select as HTMLElement).dataset.columnIndex!);
-    select.addEventListener('change', () => {
-      this.handleOperatorChange(columnIndex);
-    });
-  });
 
-  // Input change (text, number, date)
-  this.shadow.querySelectorAll('input.filter-input').forEach(input => {
-    const columnIndex = parseInt((input as HTMLElement).dataset.columnIndex!);
-    const isSecond = (input as HTMLElement).dataset.isSecond === 'true';
-    
-    input.addEventListener('input', () => {
-      this.handleFilterChange(columnIndex, isSecond);
-    });
-  });
-
-  // Select change (boolean)
-  this.shadow.querySelectorAll('select.filter-select').forEach(select => {
-    const columnIndex = parseInt((select as HTMLElement).dataset.columnIndex!);
-    const isSecond = (select as HTMLElement).dataset.isSecond === 'true';
-    
-    select.addEventListener('change', () => {
-      this.handleFilterChange(columnIndex, isSecond);
-    });
-  });
-
-  // Clear buttons
-  this.shadow.querySelectorAll('span.filter-clear').forEach(clearBtn => {
-    const columnIndex = parseInt((clearBtn as HTMLElement).dataset.columnIndex!);
-    const isSecond = (clearBtn as HTMLElement).dataset.isSecond === 'true';
-    
-    clearBtn.addEventListener('click', () => {
-      this.handleFilterClear(columnIndex, isSecond);
-    });
-  });
-}
 
   // ============= END FILTER ROW METHODS =============
 

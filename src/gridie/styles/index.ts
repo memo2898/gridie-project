@@ -134,26 +134,100 @@ export const filterRowStyles = `
   width: 100%;
 }
 
-.filter-operator {
-  min-width: 110px;
-  padding: 6px 8px;
+/* ✅ AJUSTADO: Custom Dropdown para operadores */
+.filter-operator-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.filter-operator-trigger {
+  width: 36px;
+  height: 32px;
+  padding: 6px;
   border: 1px solid #ddd;
   border-radius: 4px;
   background: white;
   cursor: pointer;
-  font-size: 0.85em;
   transition: border-color 0.2s;
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
 }
 
-.filter-operator:hover {
+.filter-operator-trigger:hover {
   border-color: #667eea;
 }
 
-.filter-operator:focus {
-  outline: none;
+.filter-operator-trigger.active {
   border-color: #667eea;
   box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.filter-operator-trigger .filter-operator-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+}
+
+.filter-operator-trigger.active .filter-operator-icon {
+  color: #667eea;
+}
+
+.filter-operator-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: none;
+}
+
+.filter-operator-menu.active {
+  display: block;
+}
+
+.filter-operator-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: background 0.2s;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-operator-option:hover {
+  background: #f0f0f0;
+}
+
+.filter-operator-option.selected {
+  background: #e8edff;
+  color: #667eea;
+}
+
+.filter-operator-option .filter-operator-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.filter-operator-option .filter-operator-text {
+  flex: 1;
 }
 
 .filter-input-wrapper {
@@ -162,11 +236,13 @@ export const filterRowStyles = `
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
 .filter-input,
 .filter-select {
   flex: 1;
+  min-width: 0;
   padding: 6px 28px 6px 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
@@ -208,12 +284,13 @@ export const filterRowStyles = `
   background: #f0f0f0;
 }
 
-/* ✅ AJUSTADO: Estilos para between */
+/* Estilos para between */
 .filter-between-container {
   display: flex;
   flex-direction: column;
   gap: 6px;
   flex: 1;
+  min-width: 0;
 }
 
 .filter-between-row {
