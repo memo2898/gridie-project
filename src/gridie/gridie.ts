@@ -446,11 +446,22 @@ private handleOperatorChange(columnIndex: number): void {
   const wasBetween = oldOperator === 'between';
   const isNowBetween = newOperator === 'between';
   
-  // ✅ CRITICAL: Si cambió el layout, re-renderizar INMEDIATAMENTE antes de aplicar filtro
+  // ✅ CRITICAL: Si cambió el layout, re-renderizar INMEDIATAMENTE
   if (wasBetween !== isNowBetween) {
-    // Actualizar el operador en el manager primero (sin valor aún)
+    // ✅ FIX: Actualizar el operador en el manager con el nuevo operador
     if (isNowBetween) {
+      // Cambió A "between"
       this._filteringManager.addFilter(columnIndex, newOperator, '', '');
+    } else {
+      // Cambió DESDE "between" a otro operador
+      const currentValue = currentFilter?.value || '';
+      if (currentValue) {
+        // Mantener el primer valor si existe
+        this._filteringManager.addFilter(columnIndex, newOperator, currentValue);
+      } else {
+        // Limpiar si no hay valor
+        this._filteringManager.clearFilterValue(columnIndex);
+      }
     }
     
     // Re-renderizar la fila de filtros
@@ -472,7 +483,10 @@ private handleOperatorChange(columnIndex: number): void {
       }
     }, 0);
     
-    return; // ← Salir aquí, no aplicar filtro todavía
+    // ✅ FIX: Aplicar filtros después de cambiar el layout
+    this.applyFiltersAndSorting();
+    
+    return; // ← Salir aquí
   }
   
   // Si no cambió el layout, aplicar el filtro normalmente
@@ -496,6 +510,39 @@ private renderFilterRowOnly(): void {
     const currentValue = currentFilter?.value || '';
     const currentValue2 = currentFilter?.value2 || '';
 
+    // ✅ Layout especial para "between"
+    if (currentOperator === 'between') {
+      return `
+        <td>
+          <div class="filter-cell">
+            <div class="filter-cell-row">
+              <select 
+                class="filter-operator" 
+                data-column-index="${index}"
+              >
+                ${operators.map(op => `
+                  <option value="${op}" ${op === currentOperator ? 'selected' : ''}>
+                    ${this._lang.filtering.operators[op]}
+                  </option>
+                `).join('')}
+              </select>
+              <div class="filter-between-container">
+                <div class="filter-between-row">
+                  <span class="filter-between-label">${this._lang.filtering.placeholders.betweenFrom}</span>
+                  ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
+                </div>
+                <div class="filter-between-row">
+                  <span class="filter-between-label">${this._lang.filtering.placeholders.betweenTo}</span>
+                  ${this.renderFilterInput(header, index, currentOperator, currentValue2, true)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </td>
+      `;
+    }
+
+    // Layout normal para otros operadores
     return `
       <td>
         <div class="filter-cell">
@@ -512,16 +559,12 @@ private renderFilterRowOnly(): void {
             </select>
             ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
           </div>
-          ${currentOperator === 'between' ? `
-            <div class="filter-cell-row between-second">
-              ${this.renderFilterInput(header, index, currentOperator, currentValue2, true)}
-            </div>
-          ` : ''}
         </div>
       </td>
     `;
   }).join('');
 }
+
 
 
   private getSortIndicator(columnIndex: number): string {
@@ -560,24 +603,26 @@ private renderFilterRowOnly(): void {
   }
   return this.getDefaultOperators(header.type || 'string');
 }
-  private renderFilterRow(): string {
-    if (!this.hasFilterRow()) return '';
+ private renderFilterRow(): string {
+  if (!this.hasFilterRow()) return '';
 
-    const headers = this.headers;
+  const headers = this.headers;
 
-    return `
-      <tr class="filter-row">
-        ${headers.map((header, index) => {
-          if (!header.filters?.filterRow?.visible) {
-            return `<td></td>`;
-          }
+  return `
+    <tr class="filter-row">
+      ${headers.map((header, index) => {
+        if (!header.filters?.filterRow?.visible) {
+          return `<td></td>`;
+        }
 
-          const operators = this.getOperatorsForColumn(header);
-          const currentFilter = this._filteringManager.getColumnFilter(index);
-          const currentOperator = currentFilter?.operator || operators[0];
-          const currentValue = currentFilter?.value || '';
-          const currentValue2 = currentFilter?.value2 || '';
+        const operators = this.getOperatorsForColumn(header);
+        const currentFilter = this._filteringManager.getColumnFilter(index);
+        const currentOperator = currentFilter?.operator || operators[0];
+        const currentValue = currentFilter?.value || '';
+        const currentValue2 = currentFilter?.value2 || '';
 
+        // ✅ Layout especial para "between"
+        if (currentOperator === 'between') {
           return `
             <td>
               <div class="filter-cell">
@@ -592,20 +637,46 @@ private renderFilterRowOnly(): void {
                       </option>
                     `).join('')}
                   </select>
-                  ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
-                </div>
-                ${currentOperator === 'between' ? `
-                  <div class="filter-cell-row between-second">
-                    ${this.renderFilterInput(header, index, currentOperator, currentValue2, true)}
+                  <div class="filter-between-container">
+                    <div class="filter-between-row">
+                      <span class="filter-between-label">${this._lang.filtering.placeholders.betweenFrom}</span>
+                      ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
+                    </div>
+                    <div class="filter-between-row">
+                      <span class="filter-between-label">${this._lang.filtering.placeholders.betweenTo}</span>
+                      ${this.renderFilterInput(header, index, currentOperator, currentValue2, true)}
+                    </div>
                   </div>
-                ` : ''}
+                </div>
               </div>
             </td>
           `;
-        }).join('')}
-      </tr>
-    `;
-  }
+        }
+
+        // Layout normal para otros operadores
+        return `
+          <td>
+            <div class="filter-cell">
+              <div class="filter-cell-row">
+                <select 
+                  class="filter-operator" 
+                  data-column-index="${index}"
+                >
+                  ${operators.map(op => `
+                    <option value="${op}" ${op === currentOperator ? 'selected' : ''}>
+                      ${this._lang.filtering.operators[op]}
+                    </option>
+                  `).join('')}
+                </select>
+                ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
+              </div>
+            </div>
+          </td>
+        `;
+      }).join('')}
+    </tr>
+  `;
+}
 
 
 private renderFilterInput(

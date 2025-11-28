@@ -143,6 +143,7 @@ export const filterRowStyles = `
   cursor: pointer;
   font-size: 0.85em;
   transition: border-color 0.2s;
+  flex-shrink: 0;
 }
 
 .filter-operator:hover {
@@ -207,7 +208,26 @@ export const filterRowStyles = `
   background: #f0f0f0;
 }
 
-.filter-cell-row.between-second {
-  margin-left: 116px;
+/* ✅ AJUSTADO: Estilos para between */
+.filter-between-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.filter-between-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.filter-between-label {
+  min-width: 60px;
+  font-size: 0.8em;
+  color: #666;
+  text-align: right;
+  flex-shrink: 0;
 }
 `;
