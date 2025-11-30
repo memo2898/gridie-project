@@ -62,6 +62,20 @@ export class Menu {
       {
         label: '2. Filtering',
         path: '/2_Filtering',
+         children: [
+          {
+            label: '2.1 Row Filter',
+            path: '/2_Filtering/row_filter',
+          },
+          {
+            label: '2.2 Header Filter',
+            path: '/2_Filtering/header_filter',
+          },
+          {
+            label: '2.2 Both Filter',
+            path: '/2_Filtering/both_filter',
+          },
+        ],
       },
       {
         label: '3. Sorting',

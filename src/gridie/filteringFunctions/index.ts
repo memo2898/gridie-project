@@ -1,214 +1,298 @@
 // src/gridie/filteringFunctions/index.ts
 
 export type FilterOperator = 
-  // String operators
-  | 'contains' 
-  | 'notcontains' 
-  | 'startswith' 
-  | 'endswith' 
-  | 'equals' 
-  | 'notequal'
-  // Number/Date operators
-  | '=' 
-  | '<>' 
-  | '<' 
-  | '>' 
-  | '<=' 
-  | '>='
-  | 'between';
+  | 'contains' | 'notcontains' | 'startswith' | 'endswith' | 'equals' | 'notequal'
+  | '=' | '<>' | '<' | '>' | '<=' | '>=' | 'between'
+  | 'in' 
+  | 'year' | 'month' | 'today' | 'yesterday' | 'thisWeek' | 'thisMonth' | 'thisYear' | 'last'; 
 
 export interface FilterState {
   columnIndex: number;
   operator: FilterOperator;
   value: any;
-  value2?: any; // Para "between"
+  value2?: any;
+  unit?: "days" | "months" | "years"; 
+  year?: number; 
 }
 
 
+export interface HeaderFilterState {
+  columnIndex: number;
+  selectedValues: Set<any>; // Valores seleccionados en checkboxes
+}
 
 export class FilteringManager {
   private filterStates: FilterState[] = [];
+  private headerFilterStates: HeaderFilterState[] = []; 
 
-
-  // Agregar esta función helper al inicio de la clase
-private normalizeString(str: string): string {
-  return str
-    .toLowerCase()
-    .normalize('NFD') // Descompone caracteres con tildes
-    .replace(/[\u0300-\u036f]/g, ''); // Elimina los diacríticos (tildes)
-}
-
-
-  // Agregar o actualizar filtro en una columna
-  addFilter(columnIndex: number, operator: FilterOperator, value: any, value2?: any): void {
+  // ============= FILTER ROW (existente) =============
+  
+  addFilter(columnIndex: number, operator: FilterOperator, value: any, value2?: any, unit?: string, year?: number): void {
     const existingIndex = this.filterStates.findIndex(f => f.columnIndex === columnIndex);
     
     if (existingIndex !== -1) {
-      // Actualizar filtro existente
-      this.filterStates[existingIndex] = {
-        columnIndex,
-        operator,
-        value,
-        value2
-      };
+      this.filterStates[existingIndex] = { columnIndex, operator, value, value2, unit: unit as any, year };
     } else {
-      // Agregar nuevo filtro
-      this.filterStates.push({
-        columnIndex,
-        operator,
-        value,
-        value2
-      });
+      this.filterStates.push({ columnIndex, operator, value, value2, unit: unit as any, year });
     }
   }
 
-  // Limpiar valor de filtro pero mantener el operador
   clearFilterValue(columnIndex: number): void {
-    const index = this.filterStates.findIndex(f => f.columnIndex === columnIndex);
-    if (index !== -1) {
-      this.filterStates.splice(index, 1);
-    }
+    this.filterStates = this.filterStates.filter(f => f.columnIndex !== columnIndex);
   }
 
-  // Limpiar todos los filtros
   clearAll(): void {
     this.filterStates = [];
+    this.headerFilterStates = []; 
   }
 
-  // Obtener filtro de una columna
   getColumnFilter(columnIndex: number): FilterState | null {
     return this.filterStates.find(f => f.columnIndex === columnIndex) || null;
   }
 
-  
-
-  // Obtener todos los filtros
   getAllFilters(): FilterState[] {
     return [...this.filterStates];
   }
 
-  // Aplicar todos los filtros a los datos
-  applyFilters(data: any[], headers: any[]): any[] {
-    if (this.filterStates.length === 0) return data;
+  // ============= HEADER FILTER (nuevo) =============
 
-    return data.filter(row => {
-      // AND entre todos los filtros
-      return this.filterStates.every(filterState => {
-        const cellValue = this.getCellValueByPosition(row, filterState.columnIndex);
-        const headerType = headers[filterState.columnIndex]?.type;
-        
-        return this.evaluateFilter(
-          cellValue, 
-          filterState.operator, 
-          filterState.value, 
-          filterState.value2,
-          headerType
-        );
+  setHeaderFilterValues(columnIndex: number, selectedValues: Set<any>): void {
+    const existingIndex = this.headerFilterStates.findIndex(f => f.columnIndex === columnIndex);
+    
+    if (existingIndex !== -1) {
+      this.headerFilterStates[existingIndex].selectedValues = selectedValues;
+    } else {
+      this.headerFilterStates.push({ columnIndex, selectedValues });
+    }
+  }
+
+  //  Obtener valores seleccionados de una columna
+  getHeaderFilterValues(columnIndex: number): Set<any> {
+    const state = this.headerFilterStates.find(f => f.columnIndex === columnIndex);
+    return state ? state.selectedValues : new Set();
+  }
+
+  //  Limpiar Header Filter de una columna
+  clearHeaderFilter(columnIndex: number): void {
+    this.headerFilterStates = this.headerFilterStates.filter(f => f.columnIndex !== columnIndex);
+  }
+
+  //  Verificar si hay filtros activos en Header Filter
+  hasActiveHeaderFilter(columnIndex: number): boolean {
+    const state = this.headerFilterStates.find(f => f.columnIndex === columnIndex);
+    return state ? state.selectedValues.size > 0 : false;
+  }
+
+  // ============= APPLY FILTERS (actualizado) =============
+
+  applyFilters(data: any[], headers: any[]): any[] {
+    let filteredData = [...data];
+
+    // Aplicar Filter Row
+    this.filterStates.forEach(filter => {
+      const header = headers[filter.columnIndex];
+      filteredData = filteredData.filter(row => {
+        const cellValue = this.getCellValue(row, filter.columnIndex);
+        return this.evaluateFilter(cellValue, filter, header.type);
       });
     });
+
+    //  Aplicar Header Filter
+    this.headerFilterStates.forEach(filter => {
+      if (filter.selectedValues.size === 0) return; // Sin selección = sin filtro
+
+      const header = headers[filter.columnIndex];
+      filteredData = filteredData.filter(row => {
+        const cellValue = this.getCellValue(row, filter.columnIndex);
+        
+        // Iterar sobre los valores seleccionados
+        for (const selectedValue of filter.selectedValues) {
+          // Si es un parameter con operador
+          if (typeof selectedValue === 'object' && selectedValue.operator) {
+            if (this.evaluateFilter(cellValue, selectedValue, header.type)) {
+              return true;
+            }
+          } else {
+            // Es un valor simple
+            if (this.compareValues(cellValue, selectedValue, '=', header.type)) {
+              return true;
+            }
+          }
+        }
+        
+        return false; // No coincide con ningún valor seleccionado
+      });
+    });
+
+    return filteredData;
   }
 
-  private getCellValueByPosition(row: any, position: number): any {
+  // ============= HELPER METHODS (existentes + actualizados) =============
+
+  private getCellValue(row: any, columnIndex: number): any {
     if (Array.isArray(row)) {
-      return row[position];
+      return row[columnIndex];
     }
     const values = Object.values(row);
-    return values[position];
+    return values[columnIndex];
   }
 
-private evaluateFilter(
-  cellValue: any, 
-  operator: FilterOperator, 
-  filterValue: any, 
-  filterValue2?: any,
-  type?: string
-): boolean {
-  // Si no hay valor de filtro, no filtrar
-  if (filterValue === null || filterValue === undefined || filterValue === '') {
-    return true;
+  private normalizeString(str: string): string {
+    return str.toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
   }
 
-  // Manejar valores null/undefined en la celda
-  if (cellValue === null || cellValue === undefined) {
+  public evaluateFilter(cellValue: any, filter: FilterState, type?: string): boolean {
+    if (cellValue === null || cellValue === undefined) return false;
+
+    const { operator, value, value2, unit, year } = filter;
+
+    // String operators
+    if (operator === 'contains') {
+      return this.normalizeString(String(cellValue)).includes(this.normalizeString(String(value)));
+    }
+    if (operator === 'notcontains') {
+      return !this.normalizeString(String(cellValue)).includes(this.normalizeString(String(value)));
+    }
+    if (operator === 'startswith') {
+      return this.normalizeString(String(cellValue)).startsWith(this.normalizeString(String(value)));
+    }
+    if (operator === 'endswith') {
+      return this.normalizeString(String(cellValue)).endsWith(this.normalizeString(String(value)));
+    }
+    if (operator === 'equals') {
+      return this.normalizeString(String(cellValue)) === this.normalizeString(String(value));
+    }
+    if (operator === 'notequal') {
+      return this.normalizeString(String(cellValue)) !== this.normalizeString(String(value));
+    }
+
+    //  Array operator
+    if (operator === 'in') {
+      const arrayValue = Array.isArray(value) ? value : [value];
+      return arrayValue.some(v => this.compareValues(cellValue, v, '=', type));
+    }
+
+    // Number/Date operators
+    if (operator === 'between') {
+      return this.compareValues(cellValue, value, '>=', type) && 
+             this.compareValues(cellValue, value2, '<=', type);
+    }
+
+    //  Date operators
+    if (type === 'date' || type === 'datetime') {
+      const cellDate = new Date(cellValue);
+      const now = new Date();
+
+      switch (operator) {
+        case 'today':
+          return this.isSameDay(cellDate, now);
+        case 'yesterday':
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          return this.isSameDay(cellDate, yesterday);
+        case 'thisWeek':
+          return this.isThisWeek(cellDate);
+        case 'thisMonth':
+          return cellDate.getMonth() === now.getMonth() && cellDate.getFullYear() === now.getFullYear();
+        case 'thisYear':
+          return cellDate.getFullYear() === now.getFullYear();
+        case 'year':
+          return cellDate.getFullYear() === value;
+        case 'month':
+          return cellDate.getMonth() === value && (year ? cellDate.getFullYear() === year : true);
+        case 'last':
+          if (unit === 'days') {
+            const daysAgo = new Date(now);
+            daysAgo.setDate(daysAgo.getDate() - value);
+            return cellDate >= daysAgo;
+          }
+          if (unit === 'months') {
+            const monthsAgo = new Date(now);
+            monthsAgo.setMonth(monthsAgo.getMonth() - value);
+            return cellDate >= monthsAgo;
+          }
+          if (unit === 'years') {
+            const yearsAgo = new Date(now);
+            yearsAgo.setFullYear(yearsAgo.getFullYear() - value);
+            return cellDate >= yearsAgo;
+          }
+          break;
+      }
+    }
+
+    // Standard comparison operators
+    return this.compareValues(cellValue, value, operator, type);
+  }
+
+  private compareValues(cellValue: any, filterValue: any, operator: FilterOperator, type?: string): boolean {
+    if (type === 'number') {
+      const numCell = parseFloat(String(cellValue).replace(',', '.'));
+      const numFilter = parseFloat(String(filterValue).replace(',', '.'));
+      
+      if (isNaN(numCell) || isNaN(numFilter)) return false;
+
+      switch (operator) {
+        case '=': case 'equals': return numCell === numFilter;
+        case '<>': case 'notequal': return numCell !== numFilter;
+        case '<': return numCell < numFilter;
+        case '>': return numCell > numFilter;
+        case '<=': return numCell <= numFilter;
+        case '>=': return numCell >= numFilter;
+      }
+    }
+
+    if (type === 'date' || type === 'datetime') {
+      const dateCell = new Date(cellValue);
+      const dateFilter = new Date(filterValue);
+
+      switch (operator) {
+        case '=': case 'equals': return dateCell.getTime() === dateFilter.getTime();
+        case '<>': case 'notequal': return dateCell.getTime() !== dateFilter.getTime();
+        case '<': return dateCell < dateFilter;
+        case '>': return dateCell > dateFilter;
+        case '<=': return dateCell <= dateFilter;
+        case '>=': return dateCell >= dateFilter;
+      }
+    }
+
+    if (type === 'boolean') {
+      const boolCell = cellValue === true || cellValue === 'true';
+      const boolFilter = filterValue === true || filterValue === 'true';
+
+      switch (operator) {
+        case '=': case 'equals': return boolCell === boolFilter;
+        case '<>': case 'notequal': return boolCell !== boolFilter;
+      }
+    }
+
+    // String comparison
+    switch (operator) {
+      case '=': case 'equals': return String(cellValue) === String(filterValue);
+      case '<>': case 'notequal': return String(cellValue) !== String(filterValue);
+    }
+
     return false;
   }
 
-  // ✅ SOLUCIÓN 1: Normalizar strings para comparación
-  const cellStr = String(cellValue);
-  const filterStr = String(filterValue);
-  
-  // Para operadores de string, normalizar (sin tildes, lowercase)
-  const isStringOperator = ['contains', 'notcontains', 'startswith', 'endswith', 'equals', 'notequal'].includes(operator);
-  const normalizedCell = isStringOperator ? this.normalizeString(cellStr) : cellStr;
-  const normalizedFilter = isStringOperator ? this.normalizeString(filterStr) : filterStr;
 
-  switch (operator) {
-    // String operators - Case insensitive y sin tildes
-    case 'contains':
-      return normalizedCell.includes(normalizedFilter);
-    
-    case 'notcontains':
-      return !normalizedCell.includes(normalizedFilter);
-    
-    case 'startswith':
-      return normalizedCell.startsWith(normalizedFilter);
-    
-    case 'endswith':
-      return normalizedCell.endsWith(normalizedFilter);
-    
-    case 'equals':
-      return normalizedCell === normalizedFilter;
-    
-    case 'notequal':
-      return normalizedCell !== normalizedFilter;
-
-    // Number/Date operators
-    case '=':
-      return this.compareValues(cellValue, filterValue, type) === 0;
-    
-    case '<>':
-      return this.compareValues(cellValue, filterValue, type) !== 0;
-    
-    case '<':
-      return this.compareValues(cellValue, filterValue, type) < 0;
-    
-    case '>':
-      return this.compareValues(cellValue, filterValue, type) > 0;
-    
-    case '<=':
-      return this.compareValues(cellValue, filterValue, type) <= 0;
-    
-    case '>=':
-      return this.compareValues(cellValue, filterValue, type) >= 0;
-    
-    case 'between':
-      if (filterValue2 === null || filterValue2 === undefined || filterValue2 === '') {
-        return true;
-      }
-      const compareMin = this.compareValues(cellValue, filterValue, type);
-      const compareMax = this.compareValues(cellValue, filterValue2, type);
-      return compareMin >= 0 && compareMax <= 0;
-
-    default:
-      return true;
+  private isSameDay(date1: Date, date2: Date): boolean {
+    return date1.getDate() === date2.getDate() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getFullYear() === date2.getFullYear();
   }
-}
 
-  private compareValues(a: any, b: any, type?: string): number {
-    switch (type) {
-      case 'number':
-        return Number(a) - Number(b);
-      
-      case 'date':
-        return new Date(a).getTime() - new Date(b).getTime();
-      
-      case 'boolean':
-        return (a === b) ? 0 : a ? -1 : 1;
-      
-      default:
-        const aStr = String(a).toLowerCase();
-        const bStr = String(b).toLowerCase();
-        return aStr.localeCompare(bStr);
-    }
+  private isThisWeek(date: Date): boolean {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    return date >= startOfWeek && date <= endOfWeek;
   }
 }

@@ -1,43 +1,61 @@
-// src/gridie/lang/en.ts
 export const en = {
+  table: {
+    noData: "No data available",
+  },
   sorting: {
     sortAscending: "Sort Ascending",
     sortDescending: "Sort Descending",
     clearSorting: "Clear Sorting",
-    clearAllSorting: "Clear All Sorting"
+    clearAllSorting: "Clear All Sorting",
   },
   filtering: {
     operators: {
-      // String operators
       contains: "Contains",
       notcontains: "Does not contain",
       startswith: "Starts with",
       endswith: "Ends with",
       equals: "Equals",
       notequal: "Not equal",
-      // Number/Date operators
       '=': "Equal",
       '<>': "Not equal",
       '<': "Less than",
       '>': "Greater than",
-      '<=': "Less or equal",
-      '>=': "Greater or equal",
-      between: "Between"
+      '<=': "Less than or equal",
+      '>=': "Greater than or equal",
+      between: "Between",
     },
     placeholders: {
       string: "Type to filter...",
       number: "Enter a number...",
       date: "Select a date...",
       boolean: "Select...",
-      betweenFrom: "From...",  // ← Nuevo
-      betweenTo: "To..."        // ← Nuevo
+      betweenFrom: "From...",
+      betweenTo: "To...",
     },
     booleanOptions: {
       true: "Yes",
-      false: "No"
-    }
+      false: "No",
+    },
+    // ✅ NUEVO: Header Filter
+    headerFilter: {
+      selectAll: "Select all",
+      search: "Search...",
+      noResults: "No results found",
+      count: "items",
+      months: {
+        0: "January",
+        1: "February",
+        2: "March",
+        3: "April",
+        4: "May",
+        5: "June",
+        6: "July",
+        7: "August",
+        8: "September",
+        9: "October",
+        10: "November",
+        11: "December",
+      },
+    },
   },
-  table: {
-    noData: "No data available"
-  }
-} as const;
+};

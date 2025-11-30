@@ -1,6 +1,6 @@
 // src/features/4_FilterRow/index.ts
-import { Sandbox } from "../../components/sandbox/sandbox";
-import { Gridie } from "../../gridie/gridie";
+import { Sandbox } from "../../../components/sandbox/sandbox";
+import { Gridie } from "../../../gridie/gridie";
 import { tsCode, jsCode, htmlCode } from "./sources/sources";
 
 export function render(container: HTMLElement): void {

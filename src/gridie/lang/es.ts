@@ -1,43 +1,61 @@
-// src/gridie/lang/es.ts
 export const es = {
+  table: {
+    noData: "No hay datos disponibles",
+  },
   sorting: {
     sortAscending: "Ordenar Ascendente",
     sortDescending: "Ordenar Descendente",
     clearSorting: "Limpiar Ordenamiento",
-    clearAllSorting: "Limpiar Todo el Ordenamiento"
+    clearAllSorting: "Limpiar Todo el Ordenamiento",
   },
   filtering: {
     operators: {
-      // String operators
       contains: "Contiene",
       notcontains: "No contiene",
       startswith: "Comienza con",
       endswith: "Termina con",
       equals: "Igual a",
       notequal: "No igual a",
-      // Number/Date operators
       '=': "Igual",
       '<>': "Diferente",
       '<': "Menor que",
       '>': "Mayor que",
       '<=': "Menor o igual",
       '>=': "Mayor o igual",
-      between: "Entre"
+      between: "Entre",
     },
     placeholders: {
       string: "Escriba para filtrar...",
       number: "Ingrese un número...",
       date: "Seleccione una fecha...",
       boolean: "Seleccione...",
-      betweenFrom: "Desde...", 
-      betweenTo: "Hasta..."     
+      betweenFrom: "Desde...",
+      betweenTo: "Hasta...",
     },
     booleanOptions: {
       true: "Sí",
-      false: "No"
-    }
+      false: "No",
+    },
+    // ✅ NUEVO: Header Filter
+    headerFilter: {
+      selectAll: "Seleccionar todos",
+      search: "Buscar...",
+      noResults: "No se encontraron resultados",
+      count: "registros",
+      months: {
+        0: "Enero",
+        1: "Febrero",
+        2: "Marzo",
+        3: "Abril",
+        4: "Mayo",
+        5: "Junio",
+        6: "Julio",
+        7: "Agosto",
+        8: "Septiembre",
+        9: "Octubre",
+        10: "Noviembre",
+        11: "Diciembre",
+      },
+    },
   },
-  table: {
-    noData: "No hay datos disponibles"
-  }
-} as const;
+};

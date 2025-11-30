@@ -21,6 +21,22 @@
 // │           ├── greaterequal.svg
 // │           └── between.svg
 
+
+
+//Nuevos iconos:
+
+
+// search-icon.svg - Lupa para el campo de búsqueda 🔍: Listo
+
+// expand-icon.svg - Flecha derecha ▶ (para nodos colapsados): Listo
+// collapse-icon.svg - Flecha abajo ▼ (para nodos expandidos)
+
+// checkbox-unchecked.svg - Checkbox vacío ☐ : Listo
+// checkbox-checked.svg - Checkbox seleccionado ☑ : LISTO
+// checkbox-indeterminate.svg - Checkbox intermedio ◫ :lISTO
+// filter-active.svg - Embudo con indicador de filtro activo (opcional) : LISTO
+// filter-header.svg - Icono del embudo para el encabezado 🔽 : lISTO
+
 export const filterIcons: Record<string, string> = {
   // String operators
   contains: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24.6 15.96">
@@ -314,7 +330,68 @@ export const filterIcons: Record<string, string> = {
   </g>
 </svg>
 `,
-};
+
+
+  // 🔍 Search icon
+  "search-icon": `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <circle cx="11" cy="11" r="7" stroke="#000" stroke-width="2" fill="none"/>
+  <line x1="16" y1="16" x2="22" y2="22" stroke="#000" stroke-width="2"/>
+</svg>
+`,
+
+  // ▶ Expand icon (right arrow)
+  "expand-icon": `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <polyline points="8 4 16 12 8 20" fill="none" stroke="#000" stroke-width="2"/>
+</svg>
+`,
+
+  // ▼ Collapse icon (down arrow)
+  "collapse-icon": `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <polyline points="4 8 12 16 20 8" fill="none" stroke="#000" stroke-width="2"/>
+</svg>
+`,
+
+  // ☐ Checkbox empty
+  "checkbox-unchecked": `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <rect x="2" y="2" width="16" height="16" stroke="#000" stroke-width="2" fill="none"/>
+</svg>
+`,
+
+  // ☑ Checkbox checked
+  "checkbox-checked": `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <rect x="2" y="2" width="16" height="16" stroke="#000" stroke-width="2" fill="none"/>
+  <polyline points="5 10 9 14 15 6" fill="none" stroke="#000" stroke-width="2"/>
+</svg>
+`,
+
+  // ◫ Checkbox indeterminate
+  "checkbox-indeterminate": `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <rect x="2" y="2" width="16" height="16" stroke="#000" stroke-width="2" fill="none"/>
+  <rect x="5" y="9" width="10" height="2" fill="#000"/>
+</svg>
+`,
+
+
+"filter-header": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" fill="currentColor"/>
+</svg>`,
+
+"filter-active": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" fill="currentColor"/>
+  <circle cx="19" cy="5" r="3" fill="#667eea"/>
+</svg>`,
+
+
+
+  };
+
+
 
 export function getFilterIcon(operator: string): string {
   return filterIcons[operator] || '';
