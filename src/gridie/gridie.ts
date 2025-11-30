@@ -28,6 +28,7 @@ export interface GridieHeaderConfig {
   width?: string;
   type?: "string" | "number" | "date" | "boolean";
   filters?: GridieFiltersConfig;
+  timeFormat?: "12h" | "24h";
 }
 
 export interface GridieCellAction {
@@ -318,19 +319,114 @@ export class Gridie extends HTMLElement {
     return values[position];
   }
 
-  private formatCellValue(value: any, type?: string): string {
+  // private formatCellValue(value: any, header: GridieHeaderConfig): string {
+  //   if (value === null || value === undefined) return "";
+
+  //   switch (header.type) {
+  //     case "boolean":
+  //       return value
+  //         ? this._lang.filtering.booleanOptions.true
+  //         : this._lang.filtering.booleanOptions.false;
+
+  //     case "date":
+  //       const str = String(value);
+
+  //       // ✅ Si tiene hora (formato ISO con T), mostrar fecha + hora
+  //       if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+  //         const date = new Date(str);
+  //         if (!isNaN(date.getTime())) {
+  //           // ✅ Usar timeFormat de la columna, por defecto 24h
+  //           const timeFormat = header.timeFormat || "24h";
+
+  //           return date.toLocaleString(
+  //             this._language === "es" ? "es-ES" : "en-US",
+  //             {
+  //               year: 'numeric',
+  //               month: '2-digit',
+  //               day: '2-digit',
+  //               hour: '2-digit',
+  //               minute: '2-digit',
+  //               hour12: timeFormat === "12h"
+  //             }
+  //           );
+  //         }
+  //       }
+
+  //       // Para strings YYYY-MM-DD (solo fecha)
+  //       if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+  //         const [year, month, day] = str.split("-");
+  //         const date = new Date(
+  //           parseInt(year),
+  //           parseInt(month) - 1,
+  //           parseInt(day)
+  //         );
+  //         return date.toLocaleDateString(
+  //           this._language === "es" ? "es-ES" : "en-US"
+  //         );
+  //       }
+
+  //       // Para otros formatos
+  //       return new Date(value).toLocaleDateString(
+  //         this._language === "es" ? "es-ES" : "en-US"
+  //       );
+
+  //     case "number":
+  //       return typeof value === "number"
+  //         ? value.toLocaleString()
+  //         : String(value);
+  //     default:
+  //       return String(value);
+  //   }
+  // }
+
+  private formatCellValue(value: any, header: GridieHeaderConfig): string {
     if (value === null || value === undefined) return "";
 
-    switch (type) {
+    switch (header.type) {
       case "boolean":
         return value
           ? this._lang.filtering.booleanOptions.true
           : this._lang.filtering.booleanOptions.false;
+
       case "date":
-        // ✅ FIX: Para strings YYYY-MM-DD, formatear directamente sin Date
         const str = String(value);
+
+        // ✅ CORRECCIÓN: Si tiene hora, mostrar con el formato especificado
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+          const date = new Date(str);
+          if (!isNaN(date.getTime())) {
+            // ✅ Usar timeFormat de la columna, por defecto 24h
+            const timeFormat = header.timeFormat || "24h";
+
+            // ✅ Formateo manual para control total
+            const year = date.getUTCFullYear();
+            const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+            const day = String(date.getUTCDate()).padStart(2, "0");
+            const hours = date.getUTCHours();
+            const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+
+            let timeStr: string;
+
+            if (timeFormat === "12h") {
+              const ampm = hours >= 12 ? "PM" : "AM";
+              const hour12 = hours % 12 || 12;
+              timeStr = `${String(hour12).padStart(2, "0")}:${minutes} ${ampm}`;
+            } else {
+              timeStr = `${String(hours).padStart(2, "0")}:${minutes}`;
+            }
+
+            // Formato de fecha según idioma
+            const dateStr =
+              this._language === "es"
+                ? `${day}/${month}/${year}`
+                : `${month}/${day}/${year}`;
+
+            return `${dateStr} ${timeStr}`;
+          }
+        }
+
+        // Para strings YYYY-MM-DD (solo fecha, sin hora)
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-          // Parsear manualmente para evitar zona horaria
           const [year, month, day] = str.split("-");
           const date = new Date(
             parseInt(year),
@@ -341,10 +437,12 @@ export class Gridie extends HTMLElement {
             this._language === "es" ? "es-ES" : "en-US"
           );
         }
-        // Para otros formatos, usar Date normal
+
+        // Para otros formatos
         return new Date(value).toLocaleDateString(
           this._language === "es" ? "es-ES" : "en-US"
         );
+
       case "number":
         return typeof value === "number"
           ? value.toLocaleString()
@@ -383,7 +481,7 @@ export class Gridie extends HTMLElement {
         .join(" ");
     }
 
-    return this.formatCellValue(cellValue, header.type);
+    return this.formatCellValue(cellValue, header); // ✅ Pasar header completo
   }
 
   private handleHeaderClick(columnIndex: number): void {
@@ -438,43 +536,47 @@ export class Gridie extends HTMLElement {
     const hasColumnSort =
       this._sortingManager.getColumnSort(columnIndex) !== null;
 
-    menu.innerHTML = `
-    <div class="context-menu-item" data-action="sort-asc">
-      ▲ ${this._lang.sorting.sortAscending}
-    </div>
-    <div class="context-menu-item" data-action="sort-desc">
-      ▼ ${this._lang.sorting.sortDescending}
-    </div>
-    ${
-      hasColumnSort
-        ? `
-      <div class="context-menu-divider"></div>
-      <div class="context-menu-item" data-action="clear-sort">
-        ${this._lang.sorting.clearSorting}
-      </div>
-    `
-        : ""
-    }
-    ${
-      hasMultipleSorts
-        ? `
-      <div class="context-menu-divider"></div>
-      <div class="context-menu-item" data-action="clear-all-sort">
-        ${this._lang.sorting.clearAllSorting}
-      </div>
-    `
-        : ""
-    }
-  `;
+  menu.innerHTML = `
+  <div class="context-menu-item sort-asc-item" data-action="sort-asc">
+    <div class="sort-icon">${getFilterIcon("ascending")}</div>
+    <div class="sort-text">${this._lang.sorting.sortAscending}</div>
+  </div>
 
-    menu.addEventListener("click", (e) => {
-      const target = e.target as HTMLElement;
-      if (target.classList.contains("context-menu-item")) {
-        const action = target.dataset.action;
-        this.handleContextMenuAction(action!, columnIndex);
-        this.hideContextMenu();
-      }
-    });
+  <div class="context-menu-item sort-desc-item" data-action="sort-desc">
+    <div class="sort-icon">${getFilterIcon("descending")}</div>
+    <div class="sort-text">${this._lang.sorting.sortDescending}</div>
+  </div>
+
+  ${hasColumnSort ? `
+    <div class="context-menu-divider"></div>
+
+    <div class="context-menu-item clear-sort-item" data-action="clear-sort">
+      <div class="sort-icon">${getFilterIcon("clearSorting")}</div>
+      <div class="sort-text">${this._lang.sorting.clearSorting}</div>
+    </div>
+  ` : ""}
+
+  ${hasMultipleSorts ? `
+    <div class="context-menu-divider"></div>
+
+    <div class="context-menu-item clear-all-sort-item" data-action="clear-all-sort">
+      <div class="sort-icon">${getFilterIcon("clearAllSorting")}</div>
+      <div class="sort-text">${this._lang.sorting.clearAllSorting}</div>
+    </div>
+  ` : ""}
+`;
+
+
+   menu.addEventListener("click", (e) => {
+  const target = (e.target as HTMLElement).closest(".context-menu-item") as HTMLElement;
+  if (!target) return;
+
+  const action = target.dataset.action;
+  if (action) {
+    this.handleContextMenuAction(action, columnIndex);
+    this.hideContextMenu();
+  }
+});
 
     // ✅ CAMBIO: Agregar al contenedor en lugar de document.body
     container.appendChild(menu);
@@ -530,8 +632,6 @@ export class Gridie extends HTMLElement {
     this.applyFiltersAndSorting();
   }
 
-
-
   private applyFiltersAndSorting(): void {
     let filtered = this._filteringManager.applyFilters(
       this._originalBody,
@@ -576,18 +676,17 @@ export class Gridie extends HTMLElement {
                 const selectionStr = String(selection);
                 const isHourFilter = /T\d{2}:\d{2}/.test(selectionStr);
 
-               if (isHourFilter) {
-  // Comparar fecha + hora (hasta minutos, sin segundos/milisegundos)
-  const normalizedCell = this.normalizeDateTimeToISO(cellValue); // ✅ USAR ESTE
-  const normalizedSelection = this.normalizeDateTimeToISO(selection); // ✅ USAR ESTE
-  
-  if (normalizedCell === normalizedSelection) {
-    matchFound = true;
-    break;
-  }
-}
-                
-                else {
+                if (isHourFilter) {
+                  // Comparar fecha + hora (hasta minutos, sin segundos/milisegundos)
+                  const normalizedCell = this.normalizeDateTimeToISO(cellValue); // ✅ USAR ESTE
+                  const normalizedSelection =
+                    this.normalizeDateTimeToISO(selection); // ✅ USAR ESTE
+
+                  if (normalizedCell === normalizedSelection) {
+                    matchFound = true;
+                    break;
+                  }
+                } else {
                   // Comparar solo fechas (sin hora)
                   const normalizedCell =
                     this.normalizeDateToYYYYMMDD(cellValue);
@@ -1237,620 +1336,340 @@ export class Gridie extends HTMLElement {
     }
   }
 
-  // Generar jerarquía de fechas (para después)
-  // ✅ IMPLEMENTACIÓN COMPLETA: Generar jerarquía de fechas
-  //   private generateDateHierarchy(
-  //     columnIndex: number,
-  //     uniqueValues: any[],
-  //     config: GridieHeaderFilterConfig
-  //   ): any[] {
-  //     console.log("=== generateDateHierarchy START ===");
-  //     console.log("columnIndex:", columnIndex);
-  //     console.log("hierarchy:", config.dateHierarchy);
-  //     console.log("uniqueValues count:", uniqueValues.length);
+  private generateDateHierarchy(
+    columnIndex: number,
+    uniqueValues: any[],
+    config: GridieHeaderFilterConfig
+  ): any[] {
+    const hierarchy = config.dateHierarchy || [];
+    if (hierarchy.length === 0) return [];
 
-  //     const hierarchy = config.dateHierarchy || [];
-  //     if (hierarchy.length === 0) return [];
+    const options: any[] = [];
 
-  //     const options: any[] = [];
+    // ✅ SOLUCIÓN: Usar getUTC* en lugar de get* para evitar problemas de zona horaria
+    const countRowsForYear = (year: number): number => {
+      return this._originalBody.filter((row: any) => {
+        const cellValue = this.getCellValueByPosition(row, columnIndex);
+        if (!cellValue) return false;
+        const date = new Date(cellValue);
+        return !isNaN(date.getTime()) && date.getUTCFullYear() === year;
+      }).length;
+    };
 
-  //     // ✅ Funciones auxiliares para contar filas
-  //     const countRowsForYear = (year: number): number => {
-  //   return this._originalBody.filter((row: any) => {
-  //     const cellValue = String(this.getCellValueByPosition(row, columnIndex));
-  //     return cellValue.startsWith(String(year));
-  //   }).length;
-  // };
+    const countRowsForMonth = (year: number, month: number): number => {
+      return this._originalBody.filter((row: any) => {
+        const cellValue = this.getCellValueByPosition(row, columnIndex);
+        if (!cellValue) return false;
+        const date = new Date(cellValue);
+        return (
+          !isNaN(date.getTime()) &&
+          date.getUTCFullYear() === year &&
+          date.getUTCMonth() === month
+        );
+      }).length;
+    };
 
-  //   const countRowsForMonth = (year: number, month: number): number => {
-  //   const monthStr = String(month + 1).padStart(2, '0');
-  //   const prefix = `${year}-${monthStr}`;
-  //   return this._originalBody.filter((row: any) => {
-  //     const cellValue = String(this.getCellValueByPosition(row, columnIndex));
-  //     return cellValue.startsWith(prefix);
-  //   }).length;
-  // };
+    const countRowsForDay = (
+      year: number,
+      month: number,
+      day: number
+    ): number => {
+      return this._originalBody.filter((row: any) => {
+        const cellValue = this.getCellValueByPosition(row, columnIndex);
+        if (!cellValue) return false;
+        const date = new Date(cellValue);
+        return (
+          !isNaN(date.getTime()) &&
+          date.getUTCFullYear() === year &&
+          date.getUTCMonth() === month &&
+          date.getUTCDate() === day
+        );
+      }).length;
+    };
 
-  //     const countRowsForDay = (
-  //       year: number,
-  //       month: number,
-  //       day: number
-  //     ): number => {
-  //       return this._originalBody.filter((row: any) => {
-  //         const cellValue = this.getCellValueByPosition(row, columnIndex);
-  //         if (!cellValue) return false;
-  //         const date = new Date(cellValue);
-  //         return (
-  //           !isNaN(date.getTime()) &&
-  //           date.getFullYear() === year &&
-  //           date.getMonth() === month &&
-  //           date.getDate() === day
-  //         );
-  //       }).length;
-  //     };
+    const countRowsForHour = (
+      year: number,
+      month: number,
+      day: number,
+      hour: number
+    ): number => {
+      return this._originalBody.filter((row: any) => {
+        const cellValue = this.getCellValueByPosition(row, columnIndex);
+        if (!cellValue) return false;
+        const date = new Date(cellValue);
+        return (
+          !isNaN(date.getTime()) &&
+          date.getUTCFullYear() === year &&
+          date.getUTCMonth() === month &&
+          date.getUTCDate() === day &&
+          date.getUTCHours() === hour
+        );
+      }).length;
+    };
 
-  //     const countRowsForHour = (
-  //       year: number,
-  //       month: number,
-  //       day: number,
-  //       hour: number
-  //     ): number => {
-  //       return this._originalBody.filter((row: any) => {
-  //         const cellValue = this.getCellValueByPosition(row, columnIndex);
-  //         if (!cellValue) return false;
-  //         const date = new Date(cellValue);
-  //         return (
-  //           !isNaN(date.getTime()) &&
-  //           date.getFullYear() === year &&
-  //           date.getMonth() === month &&
-  //           date.getDate() === day &&
-  //           date.getHours() === hour
-  //         );
-  //       }).length;
-  //     };
+    // Convertir todos los valores a fechas
+    const dates = uniqueValues
+      .map((val: any) => new Date(val))
+      .filter((date: Date) => !isNaN(date.getTime()))
+      .sort((a: Date, b: Date) => a.getTime() - b.getTime());
 
-  //     // Convertir todos los valores a fechas
-  //     const dates = uniqueValues
-  //       .map((val: any) => new Date(val))
-  //       .filter((date: Date) => !isNaN(date.getTime()))
-  //       .sort((a: Date, b: Date) => a.getTime() - b.getTime());
+    if (dates.length === 0) return [];
 
-  //     if (dates.length === 0) return [];
-
-  //     // Agrupar por año
-  //     const yearGroups = new Map<number, Date[]>();
-  //     dates.forEach((date: Date) => {
-  //       const year = date.getFullYear();
-  //       if (!yearGroups.has(year)) {
-  //         yearGroups.set(year, []);
-  //       }
-  //       yearGroups.get(year)!.push(date);
-  //     });
-
-  //     // Ordenar años (más reciente primero)
-  //     const sortedYears = Array.from(yearGroups.keys()).sort((a, b) => b - a);
-
-  //     sortedYears.forEach((year: number) => {
-  //       const yearDates = yearGroups.get(year)!;
-  //       const yearId = `${columnIndex}-year-${year}`;
-  //       const yearCount = countRowsForYear(year);
-
-  //       if (hierarchy.length === 1 && hierarchy[0] === "year") {
-  //         // Solo año
-  //         options.push({
-  //           text: String(year),
-  //           value: { operator: "year", value: year },
-  //           count: yearCount,
-  //           isParameter: true,
-  //           level: 0,
-  //           id: yearId,
-  //         });
-  //       } else if (hierarchy.includes("month")) {
-  //         // Año → Mes (o más niveles)
-  //         const monthGroups = new Map<number, Date[]>();
-  //         yearDates.forEach((date: Date) => {
-  //           const month = date.getMonth();
-  //           if (!monthGroups.has(month)) {
-  //             monthGroups.set(month, []);
-  //           }
-  //           monthGroups.get(month)!.push(date);
-  //         });
-
-  //         // Parent: Año
-  //         const yearExpanded =
-  //           this._headerFilterExpandedState.get(yearId) || false;
-  //         const yearOption: any = {
-  //           text: String(year),
-  //           value: null,
-  //           count: yearCount,
-  //           isParameter: false,
-  //           level: 0,
-  //           expandable: true,
-  //           expanded: yearExpanded,
-  //           id: yearId,
-  //           children: [],
-  //         };
-  //         options.push(yearOption);
-
-  //         // Ordenar meses
-  //         const sortedMonths = Array.from(monthGroups.keys()).sort(
-  //           (a, b) => a - b
-  //         );
-
-  //         sortedMonths.forEach((month: number) => {
-  //           const monthDates = monthGroups.get(month)!;
-  //           const monthNames = [
-  //             "Enero",
-  //             "Febrero",
-  //             "Marzo",
-  //             "Abril",
-  //             "Mayo",
-  //             "Junio",
-  //             "Julio",
-  //             "Agosto",
-  //             "Septiembre",
-  //             "Octubre",
-  //             "Noviembre",
-  //             "Diciembre",
-  //           ];
-  //           const monthName = monthNames[month];
-  //           const monthId = `${columnIndex}-month-${year}-${month}`;
-  //           const monthCount = countRowsForMonth(year, month);
-
-  //           if (hierarchy.length === 2) {
-  //             // Año → Mes (sin día)
-  //             yearOption.children.push({
-  //               text: monthName,
-  //               value: { operator: "month", value: month, year: year },
-  //               count: monthCount,
-  //               isParameter: true,
-  //               level: 1,
-  //               id: monthId,
-  //             });
-  //           } else if (hierarchy.includes("day")) {
-  //             // Año → Mes → Día (o más niveles)
-  //             const dayGroups = new Map<number, Date[]>();
-  //             monthDates.forEach((date: Date) => {
-  //               const day = date.getDate();
-  //               if (!dayGroups.has(day)) {
-  //                 dayGroups.set(day, []);
-  //               }
-  //               dayGroups.get(day)!.push(date);
-  //             });
-
-  //             // Parent: Mes
-  //             const monthExpanded =
-  //               this._headerFilterExpandedState.get(monthId) || false;
-  //             const monthOption: any = {
-  //               text: monthName,
-  //               value: null,
-  //               count: monthCount,
-  //               isParameter: false,
-  //               level: 1,
-  //               expandable: true,
-  //               expanded: monthExpanded,
-  //               id: monthId,
-  //               children: [],
-  //             };
-  //             yearOption.children.push(monthOption);
-
-  //             // Ordenar días
-  //             const sortedDays = Array.from(dayGroups.keys()).sort(
-  //               (a, b) => a - b
-  //             );
-
-  //             sortedDays.forEach((day: number) => {
-  //               const dayDates = dayGroups.get(day)!;
-  //               const dayId = `${columnIndex}-day-${year}-${month}-${day}`;
-  //               const dayCount = countRowsForDay(year, month, day);
-
-  //               if (hierarchy.length === 3 || !hierarchy.includes("hour")) {
-  //                 // Año → Mes → Día (sin hora)
-  //                 const dateStr = `${year}-${String(month + 1).padStart(
-  //                   2,
-  //                   "0"
-  //                 )}-${String(day).padStart(2, "0")}`;
-  //                 monthOption.children.push({
-  //                   text: `${day} de ${monthName}`,
-  //                   value: dateStr,
-  //                   count: dayCount,
-  //                   isParameter: false,
-  //                   expandable: false, // ✅ AGREGADO: Asegurar que sea false
-  //                   level: 2,
-  //                   id: dayId,
-  //                 });
-  //               } else if (hierarchy.includes("hour")) {
-  //                 // Año → Mes → Día → Hora
-  //                 const hourGroups = new Map<number, Date[]>();
-  //                 dayDates.forEach((date: Date) => {
-  //                   const hour = date.getHours();
-  //                   if (!hourGroups.has(hour)) {
-  //                     hourGroups.set(hour, []);
-  //                   }
-  //                   hourGroups.get(hour)!.push(date);
-  //                 });
-
-  //                 // Parent: Día
-  //                 const dayExpanded =
-  //                   this._headerFilterExpandedState.get(dayId) || false;
-  //                 const dayOption: any = {
-  //                   text: `${day} de ${monthName}`,
-  //                   value: null,
-  //                   count: dayCount,
-  //                   isParameter: false,
-  //                   level: 2,
-  //                   expandable: true,
-  //                   expanded: dayExpanded,
-  //                   id: dayId,
-  //                   children: [],
-  //                 };
-  //                 monthOption.children.push(dayOption);
-
-  //                 // Ordenar horas
-  //                 const sortedHours = Array.from(hourGroups.keys()).sort(
-  //                   (a, b) => a - b
-  //                 );
-
-  //                 sortedHours.forEach((hour: number) => {
-  //                   const hourDates = hourGroups.get(hour)!;
-  //                   const timeFormat = config.timeFormat || "24h";
-  //                   let hourText: string;
-
-  //                   if (timeFormat === "12h") {
-  //                     const ampm = hour >= 12 ? "PM" : "AM";
-  //                     const hour12 = hour % 12 || 12;
-  //                     hourText = `${String(hour12).padStart(2, "0")}:00 ${ampm}`;
-  //                   } else {
-  //                     hourText = `${String(hour).padStart(2, "0")}:00`;
-  //                   }
-
-  //                   const hourId = `${columnIndex}-hour-${year}-${month}-${day}-${hour}`;
-  //                   const hourCount = countRowsForHour(year, month, day, hour);
-
-  //                   // Usar la primera fecha del grupo como valor
-  //                   dayOption.children.push({
-  //                     text: hourText,
-  //                     value: hourDates[0].toISOString(),
-  //                     count: hourCount,
-  //                     isParameter: false,
-  //                     level: 3,
-  //                     id: hourId,
-  //                   });
-  //                 });
-  //               }
-  //             });
-  //           }
-  //         });
-  //       }
-  //     });
-
-  //     console.log("Generated options:", JSON.stringify(options, null, 2));
-  //     console.log("=== generateDateHierarchy END ===");
-
-  //     return options;
-  //   }
-
-private generateDateHierarchy(
-  columnIndex: number,
-  uniqueValues: any[],
-  config: GridieHeaderFilterConfig
-): any[] {
-  const hierarchy = config.dateHierarchy || [];
-  if (hierarchy.length === 0) return [];
-
-  const options: any[] = [];
-
-  // ✅ SOLUCIÓN: Usar getUTC* en lugar de get* para evitar problemas de zona horaria
-  const countRowsForYear = (year: number): number => {
-    return this._originalBody.filter((row: any) => {
-      const cellValue = this.getCellValueByPosition(row, columnIndex);
-      if (!cellValue) return false;
-      const date = new Date(cellValue);
-      return !isNaN(date.getTime()) && date.getUTCFullYear() === year;
-    }).length;
-  };
-
-  const countRowsForMonth = (year: number, month: number): number => {
-    return this._originalBody.filter((row: any) => {
-      const cellValue = this.getCellValueByPosition(row, columnIndex);
-      if (!cellValue) return false;
-      const date = new Date(cellValue);
-      return (
-        !isNaN(date.getTime()) &&
-        date.getUTCFullYear() === year &&
-        date.getUTCMonth() === month
-      );
-    }).length;
-  };
-
-  const countRowsForDay = (
-    year: number,
-    month: number,
-    day: number
-  ): number => {
-    return this._originalBody.filter((row: any) => {
-      const cellValue = this.getCellValueByPosition(row, columnIndex);
-      if (!cellValue) return false;
-      const date = new Date(cellValue);
-      return (
-        !isNaN(date.getTime()) &&
-        date.getUTCFullYear() === year &&
-        date.getUTCMonth() === month &&
-        date.getUTCDate() === day
-      );
-    }).length;
-  };
-
-  const countRowsForHour = (
-    year: number,
-    month: number,
-    day: number,
-    hour: number
-  ): number => {
-    return this._originalBody.filter((row: any) => {
-      const cellValue = this.getCellValueByPosition(row, columnIndex);
-      if (!cellValue) return false;
-      const date = new Date(cellValue);
-      return (
-        !isNaN(date.getTime()) &&
-        date.getUTCFullYear() === year &&
-        date.getUTCMonth() === month &&
-        date.getUTCDate() === day &&
-        date.getUTCHours() === hour
-      );
-    }).length;
-  };
-
-  // Convertir todos los valores a fechas
-  const dates = uniqueValues
-    .map((val: any) => new Date(val))
-    .filter((date: Date) => !isNaN(date.getTime()))
-    .sort((a: Date, b: Date) => a.getTime() - b.getTime());
-
-  if (dates.length === 0) return [];
-
-  // Agrupar por año (UTC)
-  const yearGroups = new Map<number, Date[]>();
-  dates.forEach((date: Date) => {
-    const year = date.getUTCFullYear();
-    if (!yearGroups.has(year)) {
-      yearGroups.set(year, []);
-    }
-    yearGroups.get(year)!.push(date);
-  });
-
-  // Ordenar años (más reciente primero)
-  const sortedYears = Array.from(yearGroups.keys()).sort((a, b) => b - a);
-
-  sortedYears.forEach((year: number) => {
-    const yearDates = yearGroups.get(year)!;
-    const yearId = `${columnIndex}-year-${year}`;
-    const yearCount = countRowsForYear(year);
-
-    if (hierarchy.length === 1 && hierarchy[0] === "year") {
-      options.push({
-        text: String(year),
-        value: { operator: "year", value: year },
-        count: yearCount,
-        isParameter: true,
-        level: 0,
-        id: yearId,
-      });
-    } else if (hierarchy.includes("month")) {
-      // Agrupar por mes (UTC)
-      const monthGroups = new Map<number, Date[]>();
-      yearDates.forEach((date: Date) => {
-        const month = date.getUTCMonth();
-        if (!monthGroups.has(month)) {
-          monthGroups.set(month, []);
-        }
-        monthGroups.get(month)!.push(date);
-      });
-
-      const yearExpanded =
-        this._headerFilterExpandedState.get(yearId) || false;
-      const yearOption: any = {
-        text: String(year),
-        value: null,
-        count: yearCount,
-        isParameter: false,
-        level: 0,
-        expandable: true,
-        expanded: yearExpanded,
-        id: yearId,
-        children: [],
-      };
-      options.push(yearOption);
-
-      const sortedMonths = Array.from(monthGroups.keys()).sort(
-        (a, b) => a - b
-      );
-
-      sortedMonths.forEach((month: number) => {
-        const monthDates = monthGroups.get(month)!;
-        const monthNames = [
-          "Enero",
-          "Febrero",
-          "Marzo",
-          "Abril",
-          "Mayo",
-          "Junio",
-          "Julio",
-          "Agosto",
-          "Septiembre",
-          "Octubre",
-          "Noviembre",
-          "Diciembre",
-        ];
-        const monthName = monthNames[month];
-        const monthId = `${columnIndex}-month-${year}-${month}`;
-        const monthCount = countRowsForMonth(year, month);
-
-        if (hierarchy.length === 2) {
-          yearOption.children.push({
-            text: monthName,
-            value: { operator: "month", value: month, year: year },
-            count: monthCount,
-            isParameter: true,
-            level: 1,
-            id: monthId,
-          });
-        } else if (hierarchy.includes("day")) {
-          // Agrupar por día (UTC)
-          const dayGroups = new Map<number, Date[]>();
-          monthDates.forEach((date: Date) => {
-            const day = date.getUTCDate();
-            if (!dayGroups.has(day)) {
-              dayGroups.set(day, []);
-            }
-            dayGroups.get(day)!.push(date);
-          });
-
-          const monthExpanded =
-            this._headerFilterExpandedState.get(monthId) || false;
-          const monthOption: any = {
-            text: monthName,
-            value: null,
-            count: monthCount,
-            isParameter: false,
-            level: 1,
-            expandable: true,
-            expanded: monthExpanded,
-            id: monthId,
-            children: [],
-          };
-          yearOption.children.push(monthOption);
-
-          const sortedDays = Array.from(dayGroups.keys()).sort(
-            (a, b) => a - b
-          );
-
-          sortedDays.forEach((day: number) => {
-            const dayDates = dayGroups.get(day)!;
-            const dayId = `${columnIndex}-day-${year}-${month}-${day}`;
-            const dayCount = countRowsForDay(year, month, day);
-
-            if (hierarchy.length === 3 || !hierarchy.includes("hour")) {
-              const dateStr = `${year}-${String(month + 1).padStart(
-                2,
-                "0"
-              )}-${String(day).padStart(2, "0")}`;
-              monthOption.children.push({
-                text: `${day} de ${monthName}`,
-                value: dateStr,
-                count: dayCount,
-                isParameter: false,
-                expandable: false,
-                level: 2,
-                id: dayId,
-              });
-            } else if (hierarchy.includes("hour")) {
-              // Agrupar por hora (UTC)
-              const hourGroups = new Map<number, Date[]>();
-              dayDates.forEach((date: Date) => {
-                const hour = date.getUTCHours();
-                if (!hourGroups.has(hour)) {
-                  hourGroups.set(hour, []);
-                }
-                hourGroups.get(hour)!.push(date);
-              });
-
-              const dayExpanded =
-                this._headerFilterExpandedState.get(dayId) || false;
-              const dayOption: any = {
-                text: `${day} de ${monthName}`,
-                value: null,
-                count: dayCount,
-                isParameter: false,
-                level: 2,
-                expandable: true,
-                expanded: dayExpanded,
-                id: dayId,
-                children: [],
-              };
-              monthOption.children.push(dayOption);
-
-              const sortedHours = Array.from(hourGroups.keys()).sort(
-                (a, b) => a - b
-              );
-
-              sortedHours.forEach((hour: number) => {
-                const hourDates = hourGroups.get(hour)!;
-                const timeFormat = config.timeFormat || "24h";
-                let hourText: string;
-
-                if (timeFormat === "12h") {
-                  const ampm = hour >= 12 ? "PM" : "AM";
-                  const hour12 = hour % 12 || 12;
-                  hourText = `${String(hour12).padStart(2, "0")}:00 ${ampm}`;
-                } else {
-                  hourText = `${String(hour).padStart(2, "0")}:00`;
-                }
-
-                const hourId = `${columnIndex}-hour-${year}-${month}-${day}-${hour}`;
-                const hourCount = countRowsForHour(year, month, day, hour);
-
-                // ✅ FIX: Buscar el valor ORIGINAL que corresponde a esta hora UTC
-                const matchingRow = this._originalBody.find((row: any) => {
-                  const cellValue = this.getCellValueByPosition(row, columnIndex);
-                  if (!cellValue) return false;
-                  const date = new Date(cellValue);
-                  return (
-                    !isNaN(date.getTime()) &&
-                    date.getUTCFullYear() === year &&
-                    date.getUTCMonth() === month &&
-                    date.getUTCDate() === day &&
-                    date.getUTCHours() === hour
-                  );
-                });
-
-                const valueToUse = matchingRow 
-                  ? this.getCellValueByPosition(matchingRow, columnIndex)
-                  : hourDates[0].toISOString();
-
-                dayOption.children.push({
-                  text: hourText,
-                  value: valueToUse, // ✅ Usar valor original
-                  count: hourCount,
-                  isParameter: false,
-                  level: 3,
-                  id: hourId,
-                });
-              });
-            }
-          });
-        }
-      });
-    }
-  });
-
-  return options;
-}
-
-
-// ✅ NUEVO: Normalizar datetime completo (para filtros de hora)
-private normalizeDateTimeToISO(value: any): string {
-  if (!value) return '';
-  
-  const str = String(value);
-  
-  // Si ya es un ISO string con hora
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
-    // Normalizar: remover milisegundos y timezone para comparar solo hasta minutos
-    const date = new Date(str);
-    if (!isNaN(date.getTime())) {
-      // Formato: YYYY-MM-DDTHH:mm
+    // Agrupar por año (UTC)
+    const yearGroups = new Map<number, Date[]>();
+    dates.forEach((date: Date) => {
       const year = date.getUTCFullYear();
-      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(date.getUTCDate()).padStart(2, '0');
-      const hours = String(date.getUTCHours()).padStart(2, '0');
-      const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
-    }
+      if (!yearGroups.has(year)) {
+        yearGroups.set(year, []);
+      }
+      yearGroups.get(year)!.push(date);
+    });
+
+    // Ordenar años (más reciente primero)
+    const sortedYears = Array.from(yearGroups.keys()).sort((a, b) => b - a);
+
+    sortedYears.forEach((year: number) => {
+      const yearDates = yearGroups.get(year)!;
+      const yearId = `${columnIndex}-year-${year}`;
+      const yearCount = countRowsForYear(year);
+
+      if (hierarchy.length === 1 && hierarchy[0] === "year") {
+        options.push({
+          text: String(year),
+          value: { operator: "year", value: year },
+          count: yearCount,
+          isParameter: true,
+          level: 0,
+          id: yearId,
+        });
+      } else if (hierarchy.includes("month")) {
+        // Agrupar por mes (UTC)
+        const monthGroups = new Map<number, Date[]>();
+        yearDates.forEach((date: Date) => {
+          const month = date.getUTCMonth();
+          if (!monthGroups.has(month)) {
+            monthGroups.set(month, []);
+          }
+          monthGroups.get(month)!.push(date);
+        });
+
+        const yearExpanded =
+          this._headerFilterExpandedState.get(yearId) || false;
+        const yearOption: any = {
+          text: String(year),
+          value: null,
+          count: yearCount,
+          isParameter: false,
+          level: 0,
+          expandable: true,
+          expanded: yearExpanded,
+          id: yearId,
+          children: [],
+        };
+        options.push(yearOption);
+
+        const sortedMonths = Array.from(monthGroups.keys()).sort(
+          (a, b) => a - b
+        );
+
+        sortedMonths.forEach((month: number) => {
+          const monthDates = monthGroups.get(month)!;
+          const monthNames = [
+            "Enero",
+            "Febrero",
+            "Marzo",
+            "Abril",
+            "Mayo",
+            "Junio",
+            "Julio",
+            "Agosto",
+            "Septiembre",
+            "Octubre",
+            "Noviembre",
+            "Diciembre",
+          ];
+          const monthName = monthNames[month];
+          const monthId = `${columnIndex}-month-${year}-${month}`;
+          const monthCount = countRowsForMonth(year, month);
+
+          if (hierarchy.length === 2) {
+            yearOption.children.push({
+              text: monthName,
+              value: { operator: "month", value: month, year: year },
+              count: monthCount,
+              isParameter: true,
+              level: 1,
+              id: monthId,
+            });
+          } else if (hierarchy.includes("day")) {
+            // Agrupar por día (UTC)
+            const dayGroups = new Map<number, Date[]>();
+            monthDates.forEach((date: Date) => {
+              const day = date.getUTCDate();
+              if (!dayGroups.has(day)) {
+                dayGroups.set(day, []);
+              }
+              dayGroups.get(day)!.push(date);
+            });
+
+            const monthExpanded =
+              this._headerFilterExpandedState.get(monthId) || false;
+            const monthOption: any = {
+              text: monthName,
+              value: null,
+              count: monthCount,
+              isParameter: false,
+              level: 1,
+              expandable: true,
+              expanded: monthExpanded,
+              id: monthId,
+              children: [],
+            };
+            yearOption.children.push(monthOption);
+
+            const sortedDays = Array.from(dayGroups.keys()).sort(
+              (a, b) => a - b
+            );
+
+            sortedDays.forEach((day: number) => {
+              const dayDates = dayGroups.get(day)!;
+              const dayId = `${columnIndex}-day-${year}-${month}-${day}`;
+              const dayCount = countRowsForDay(year, month, day);
+
+              if (hierarchy.length === 3 || !hierarchy.includes("hour")) {
+                const dateStr = `${year}-${String(month + 1).padStart(
+                  2,
+                  "0"
+                )}-${String(day).padStart(2, "0")}`;
+                monthOption.children.push({
+                  text: `${day} de ${monthName}`,
+                  value: dateStr,
+                  count: dayCount,
+                  isParameter: false,
+                  expandable: false,
+                  level: 2,
+                  id: dayId,
+                });
+              } else if (hierarchy.includes("hour")) {
+                // Agrupar por hora (UTC)
+                const hourGroups = new Map<number, Date[]>();
+                dayDates.forEach((date: Date) => {
+                  const hour = date.getUTCHours();
+                  if (!hourGroups.has(hour)) {
+                    hourGroups.set(hour, []);
+                  }
+                  hourGroups.get(hour)!.push(date);
+                });
+
+                const dayExpanded =
+                  this._headerFilterExpandedState.get(dayId) || false;
+                const dayOption: any = {
+                  text: `${day} de ${monthName}`,
+                  value: null,
+                  count: dayCount,
+                  isParameter: false,
+                  level: 2,
+                  expandable: true,
+                  expanded: dayExpanded,
+                  id: dayId,
+                  children: [],
+                };
+                monthOption.children.push(dayOption);
+
+                const sortedHours = Array.from(hourGroups.keys()).sort(
+                  (a, b) => a - b
+                );
+
+                sortedHours.forEach((hour: number) => {
+                  const hourDates = hourGroups.get(hour)!;
+                  const timeFormat = config.timeFormat || "24h";
+
+                  // ✅ Buscar el valor ORIGINAL que corresponde a esta hora UTC
+                  const matchingRow = this._originalBody.find((row: any) => {
+                    const cellValue = this.getCellValueByPosition(
+                      row,
+                      columnIndex
+                    );
+                    if (!cellValue) return false;
+                    const date = new Date(cellValue);
+                    return (
+                      !isNaN(date.getTime()) &&
+                      date.getUTCFullYear() === year &&
+                      date.getUTCMonth() === month &&
+                      date.getUTCDate() === day &&
+                      date.getUTCHours() === hour
+                    );
+                  });
+
+                  const valueToUse = matchingRow
+                    ? this.getCellValueByPosition(matchingRow, columnIndex)
+                    : hourDates[0].toISOString();
+
+                  // ✅ CRÍTICO: Formatear el texto usando el valor original y timeFormat
+                  const dateForDisplay = new Date(valueToUse);
+                  let hourText: string;
+
+                  if (timeFormat === "12h") {
+                    const hours = dateForDisplay.getUTCHours();
+                    const minutes = dateForDisplay.getUTCMinutes();
+                    const ampm = hours >= 12 ? "PM" : "AM";
+                    const hour12 = hours % 12 || 12;
+                    hourText = `${String(hour12).padStart(2, "0")}:${String(
+                      minutes
+                    ).padStart(2, "0")} ${ampm}`;
+                  } else {
+                    const hours = dateForDisplay.getUTCHours();
+                    const minutes = dateForDisplay.getUTCMinutes();
+                    hourText = `${String(hours).padStart(2, "0")}:${String(
+                      minutes
+                    ).padStart(2, "0")}`;
+                  }
+
+                  const hourId = `${columnIndex}-hour-${year}-${month}-${day}-${hour}`;
+                  const hourCount = countRowsForHour(year, month, day, hour);
+
+                  dayOption.children.push({
+                    text: hourText,
+                    value: valueToUse,
+                    count: hourCount,
+                    isParameter: false,
+                    level: 3,
+                    id: hourId,
+                  });
+                });
+              }
+            });
+          }
+        });
+      }
+    });
+
+    return options;
   }
-  
-  return '';
-}
+
+  // ✅ NUEVO: Normalizar datetime completo (para filtros de hora)
+  private normalizeDateTimeToISO(value: any): string {
+    if (!value) return "";
+
+    const str = String(value);
+
+    // Si ya es un ISO string con hora
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+      // Normalizar: remover milisegundos y timezone para comparar solo hasta minutos
+      const date = new Date(str);
+      if (!isNaN(date.getTime())) {
+        // Formato: YYYY-MM-DDTHH:mm
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(date.getUTCDate()).padStart(2, "0");
+        const hours = String(date.getUTCHours()).padStart(2, "0");
+        const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+      }
+    }
+
+    return "";
+  }
 
   private applyHeaderFilters(): void {
     console.log("🔍 Applying header filters...");
@@ -1926,36 +1745,6 @@ private normalizeDateTimeToISO(value: any): string {
     // Re-renderizar
     this.updateTableContent();
   }
-
-  // ✅ NUEVO: Aplanar jerarquía para renderizado
-  // private flattenHierarchy(
-  //   options: any[],
-  //   parentExpanded: boolean = true
-  // ): any[] {
-  //   const flattened: any[] = [];
-
-  //   options.forEach((option: any) => {
-  //     // Siempre agregar la opción actual
-  //     flattened.push(option);
-
-  //     // Si tiene hijos Y está expandida Y el padre está expandido
-  //     if (
-  //       option.children &&
-  //       option.children.length > 0 &&
-  //       option.expanded &&
-  //       parentExpanded
-  //     ) {
-  //       // Recursivamente aplanar los hijos
-  //       const childrenFlattened = this.flattenHierarchy(
-  //         option.children,
-  //         option.expanded
-  //       );
-  //       flattened.push(...childrenFlattened);
-  //     }
-  //   });
-
-  //   return flattened;
-  // }
 
   private flattenHierarchy(
     options: any[],
@@ -2081,7 +1870,7 @@ private normalizeDateTimeToISO(value: any): string {
       const uniqueValues = this.extractUniqueValues(columnIndex);
       allOptions = allOptions.concat(
         Array.from(uniqueValues).map((val: any) => {
-          const displayValue = this.formatCellValue(val, header.type);
+          const displayValue = this.formatCellValue(val, header);
           const count = this._originalBody.filter(
             (row: any) => this.getCellValueByPosition(row, columnIndex) === val
           ).length;
@@ -3147,7 +2936,16 @@ private normalizeDateTimeToISO(value: any): string {
         font-size: 14px;
         transition: background 0.2s;
         user-select: none;
+        display:flex;
+        gap:10px;
       }
+
+      .sort-icon{
+          display:flex;
+          width: 16px;
+          height: 16px;
+      }
+     
 
       .context-menu-item:hover {
         background: #f0f0f0;

@@ -388,6 +388,113 @@ export const filterIcons: Record<string, string> = {
 </svg>`,
 
 
+"ascending":`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48.95 45.29">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #161615;
+      }
+    </style>
+  </defs>
+  <g id="Capa_2" data-name="Capa 2">
+    <g id="Capa_1-2" data-name="Capa 1">
+      <polygon
+        class="cls-1"
+        points="48.95 13.4 35.55 0 35.54 0 35.54 0 22.14 13.4 24.86 16.13 33.64 7.35 33.64 45.29 37.48 45.29 37.48 7.38 46.23 16.13 48.95 13.4"
+      />
+      <path
+        class="cls-1"
+        d="M17.6,17.53v2.26H2.38V18L13.83,3.83H2.56V1.57H17.27V3.34L5.86,17.53Z"
+      />
+      <path
+        class="cls-1"
+        d="M14.37,39.6H4.69l-2,4.56H0L8.25,25.94h2.58l8.28,18.22H16.37Zm-.91-2.08L9.53,28.59,5.6,37.52Z"
+      />
+    </g>
+  </g>
+</svg>
+`,
+"descending":`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48.95 45.29">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #161615;
+      }
+    </style>
+  </defs>
+  <g id="Capa_2" data-name="Capa 2">
+    <g id="Capa_1-2" data-name="Capa 1">
+      <polygon
+        class="cls-1"
+        points="22.14 31.89 35.54 45.29 35.54 45.29 35.55 45.29 48.95 31.89 46.23 29.16 37.45 37.94 37.45 0 33.6 0 33.6 37.91 24.86 29.16 22.14 31.89"
+      />
+      <path
+        class="cls-1"
+        d="M17.6,17.53v2.26H2.38V18L13.83,3.83H2.56V1.57H17.27V3.34L5.86,17.53Z"
+      />
+      <path
+        class="cls-1"
+        d="M14.37,39.6H4.69l-2,4.56H0L8.25,25.94h2.58l8.28,18.22H16.37Zm-.91-2.08L9.53,28.59,5.6,37.52Z"
+      />
+    </g>
+  </g>
+</svg>
+
+`,
+
+"clearSorting":`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 19.1 19.2">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #161615;
+      }
+    </style>
+  </defs>
+  <g id="Capa_2" data-name="Capa 2">
+    <g id="Capa_1-2" data-name="Capa 1">
+      <rect class="cls-1" x="4.24" y="6.41" width="2.75" height="2.75" />
+      <rect class="cls-1" x="8.58" y="6.41" width="5.61" height="2.75" />
+      <polygon
+        class="cls-1"
+        points="19.1 17.47 16.93 15.3 18.97 13.26 17.36 11.66 15.33 13.7 13.16 11.53 11.56 13.13 13.72 15.3 11.42 17.6 13.03 19.2 15.33 16.9 17.5 19.07 19.1 17.47"
+      />
+      <path
+        class="cls-1"
+        d="M17.52,0H.87A.87.87,0,0,0,0,.87V14.71a.87.87,0,0,0,.87.87H9.45V13.52H2.19V2.24H16.31V9.52h2.08V.87A.87.87,0,0,0,17.52,0Z"
+      />
+    </g>
+  </g>
+</svg>
+`,
+"clearAllSorting":`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 23.31 22.97">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #161615;
+      }
+    </style>
+  </defs>
+  <g id="Capa_2" data-name="Capa 2">
+    <g id="Capa_1-2" data-name="Capa 1">
+      <rect class="cls-1" x="8.45" y="10.18" width="2.75" height="2.75" />
+      <rect class="cls-1" x="12.78" y="10.18" width="5.61" height="2.75" />
+      <polygon
+        class="cls-1"
+        points="23.31 21.23 21.14 19.06 23.18 17.03 21.57 15.42 19.54 17.46 17.37 15.29 15.76 16.89 17.93 19.06 15.63 21.36 17.23 22.97 19.54 20.67 21.7 22.84 23.31 21.23"
+      />
+      <path
+        class="cls-1"
+        d="M17.52,0H.87A.87.87,0,0,0,0,.87V13.52H2.19V2.24h16.2V.87A.87.87,0,0,0,17.52,0Z"
+      />
+      <path
+        class="cls-1"
+        d="M21.73,3.77H5.08a.87.87,0,0,0-.87.87V18.47a.87.87,0,0,0,.87.87h8.58V17.28H6.39V6H20.52v7.29H22.6V4.64A.87.87,0,0,0,21.73,3.77Z"
+      />
+    </g>
+  </g>
+</svg>
+`
 
   };
 

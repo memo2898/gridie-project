@@ -221,7 +221,9 @@ export function render(container: HTMLElement): void {
         type: "number" as const,
         sortable: true,
         filters: {
-          
+          filterRow: {
+            visible: true,
+          },
           headerFilter: {
             visible: true,
             parameters: [
