@@ -3,9 +3,8 @@
 export type FilterOperator = 
   | 'contains' | 'notcontains' | 'startswith' | 'endswith' | 'equals' | 'notequal'
   | '=' | '<>' | '<' | '>' | '<=' | '>=' | 'between'
-  | 'in' 
-  | 'year' | 'month' | 'today' | 'yesterday' | 'thisWeek' | 'thisMonth' | 'thisYear' | 'last'; 
-
+  | 'in' | 'notin' 
+  | 'year' | 'month' | 'today' | 'yesterday' | 'thisWeek' | 'thisMonth' | 'thisYear' | 'last';
 export interface FilterState {
   columnIndex: number;
   operator: FilterOperator;
