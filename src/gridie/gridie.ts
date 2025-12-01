@@ -319,65 +319,6 @@ export class Gridie extends HTMLElement {
     return values[position];
   }
 
-  // private formatCellValue(value: any, header: GridieHeaderConfig): string {
-  //   if (value === null || value === undefined) return "";
-
-  //   switch (header.type) {
-  //     case "boolean":
-  //       return value
-  //         ? this._lang.filtering.booleanOptions.true
-  //         : this._lang.filtering.booleanOptions.false;
-
-  //     case "date":
-  //       const str = String(value);
-
-  //       // ✅ Si tiene hora (formato ISO con T), mostrar fecha + hora
-  //       if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
-  //         const date = new Date(str);
-  //         if (!isNaN(date.getTime())) {
-  //           // ✅ Usar timeFormat de la columna, por defecto 24h
-  //           const timeFormat = header.timeFormat || "24h";
-
-  //           return date.toLocaleString(
-  //             this._language === "es" ? "es-ES" : "en-US",
-  //             {
-  //               year: 'numeric',
-  //               month: '2-digit',
-  //               day: '2-digit',
-  //               hour: '2-digit',
-  //               minute: '2-digit',
-  //               hour12: timeFormat === "12h"
-  //             }
-  //           );
-  //         }
-  //       }
-
-  //       // Para strings YYYY-MM-DD (solo fecha)
-  //       if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-  //         const [year, month, day] = str.split("-");
-  //         const date = new Date(
-  //           parseInt(year),
-  //           parseInt(month) - 1,
-  //           parseInt(day)
-  //         );
-  //         return date.toLocaleDateString(
-  //           this._language === "es" ? "es-ES" : "en-US"
-  //         );
-  //       }
-
-  //       // Para otros formatos
-  //       return new Date(value).toLocaleDateString(
-  //         this._language === "es" ? "es-ES" : "en-US"
-  //       );
-
-  //     case "number":
-  //       return typeof value === "number"
-  //         ? value.toLocaleString()
-  //         : String(value);
-  //     default:
-  //       return String(value);
-  //   }
-  // }
 
   private formatCellValue(value: any, header: GridieHeaderConfig): string {
     if (value === null || value === undefined) return "";
@@ -632,27 +573,51 @@ export class Gridie extends HTMLElement {
     this.applyFiltersAndSorting();
   }
 
-  private applyFiltersAndSorting(): void {
-    let filtered = this._filteringManager.applyFilters(
-      this._originalBody,
-      this.headers
-    );
 
-    if (this._headerFilterSelections.size > 0) {
-      filtered = filtered.filter((row: any) => {
-        for (const [
-          colIndex,
-          selections,
-        ] of this._headerFilterSelections.entries()) {
-          if (selections.size === 0) continue;
 
-          const cellValue = this.getCellValueByPosition(row, colIndex);
-          const header = this.headers[colIndex];
+private applyFiltersAndSorting(): void {
+  let filtered = this._filteringManager.applyFilters(
+    this._originalBody,
+    this.headers
+  );
 
-          let matchFound = false;
+  if (this._headerFilterSelections.size > 0) {
+    console.log("🔍 Aplicando header filters...");
+    console.log("_headerFilterSelections.size:", this._headerFilterSelections.size);
+    
+    // ✅ LOG MÁS DETALLADO:
+    for (const [colIndex, selections] of this._headerFilterSelections.entries()) {
+      console.log(`  Columna ${colIndex}:`, selections);
+      console.log(`  Columna ${colIndex} - Array.from:`, Array.from(selections));
+      console.log(`  Columna ${colIndex} - selections.size:`, selections.size);
+    }
+    
+    filtered = filtered.filter((row: any) => {
+      for (const [
+        colIndex,
+        selections,
+      ] of this._headerFilterSelections.entries()) {
+        if (selections.size === 0) continue;
 
-          for (const selection of selections) {
-            if (typeof selection === "object" && selection.operator) {
+        const cellValue = this.getCellValueByPosition(row, colIndex);
+        const header = this.headers[colIndex];
+
+        console.log(`\n📋 Evaluando fila - Columna ${colIndex} (${header.label})`);
+        console.log("  Valor de celda:", cellValue, `(tipo: ${typeof cellValue})`);
+        console.log("  Tipo de columna:", header.type);
+        console.log("  Selecciones para esta columna:", Array.from(selections));
+
+        let matchFound = false;
+
+        for (const selection of selections) {
+          console.log("  🔎 Evaluando selección:", selection);
+          
+          // ✅ CASO 1: Es un parameter con operator (incluyendo <, >, between, etc.)
+          if (typeof selection === "object" && selection.operator) {
+            console.log("    → Es un parameter con operator:", selection.operator);
+            
+            // Para operadores de jerarquía de fechas (year, month)
+            if (selection.operator === "year" || selection.operator === "month") {
               const date = new Date(cellValue);
               if (isNaN(date.getTime())) continue;
 
@@ -671,60 +636,264 @@ export class Gridie extends HTMLElement {
                   break;
               }
             } else {
-              if (header.type === "date") {
-                // ✅ DETECTAR: Si la selección incluye hora (tiene 'T' y hora)
-                const selectionStr = String(selection);
-                const isHourFilter = /T\d{2}:\d{2}/.test(selectionStr);
+              // ✅ Para otros operadores (<, >, <=, >=, between, etc.)
+              // Convertir cellValue al tipo correcto
+              let valueToCompare = cellValue;
+              
+              if (header.type === "number") {
+                valueToCompare = typeof cellValue === "string" 
+                  ? parseFloat(cellValue) 
+                  : cellValue;
+                
+                console.log("    → Valor convertido a número:", valueToCompare);
+                
+                // Si después de parsear sigue siendo NaN, skip
+                if (isNaN(valueToCompare)) {
+                  console.log("    ❌ Valor es NaN, saltando");
+                  continue;
+                }
+              }
+              
+              // Evaluar el filtro
+              const result = this.evaluateParameterFilter(
+                valueToCompare,
+                selection,
+                header.type
+              );
 
-                if (isHourFilter) {
-                  // Comparar fecha + hora (hasta minutos, sin segundos/milisegundos)
-                  const normalizedCell = this.normalizeDateTimeToISO(cellValue); // ✅ USAR ESTE
-                  const normalizedSelection =
-                    this.normalizeDateTimeToISO(selection); // ✅ USAR ESTE
+              console.log("    → Resultado evaluación:", result);
 
-                  if (normalizedCell === normalizedSelection) {
-                    matchFound = true;
-                    break;
-                  }
-                } else {
-                  // Comparar solo fechas (sin hora)
-                  const normalizedCell =
-                    this.normalizeDateToYYYYMMDD(cellValue);
-                  const normalizedSelection =
-                    this.normalizeDateToYYYYMMDD(selection);
+              if (result) {
+                matchFound = true;
+              }
+            }
+          } else {
+            // ✅ CASO 2: Es un valor simple o fecha específica
+            console.log("    → Es un valor simple");
+            if (header.type === "date") {
+              const selectionStr = String(selection);
+              const isHourFilter = /T\d{2}:\d{2}/.test(selectionStr);
 
-                  if (normalizedCell === normalizedSelection) {
-                    matchFound = true;
-                    break;
-                  }
+              if (isHourFilter) {
+                // Comparar fecha + hora
+                const normalizedCell = this.normalizeDateTimeToISO(cellValue);
+                const normalizedSelection =
+                  this.normalizeDateTimeToISO(selection);
+
+                if (normalizedCell === normalizedSelection) {
+                  matchFound = true;
+                  break;
                 }
               } else {
-                if (
-                  cellValue === selection ||
-                  String(cellValue) === String(selection)
-                ) {
+                // Comparar solo fechas
+                const normalizedCell = this.normalizeDateToYYYYMMDD(cellValue);
+                const normalizedSelection =
+                  this.normalizeDateToYYYYMMDD(selection);
+
+                if (normalizedCell === normalizedSelection) {
                   matchFound = true;
                   break;
                 }
               }
+            } else {
+              // Comparación simple para otros tipos
+              if (
+                cellValue === selection ||
+                String(cellValue) === String(selection)
+              ) {
+                matchFound = true;
+                break;
+              }
             }
           }
-
-          if (!matchFound) return false;
         }
 
-        return true;
-      });
+        console.log("  ✅ Match encontrado para esta columna:", matchFound);
+
+        if (!matchFound) {
+          console.log("  ❌ Fila rechazada - no cumple criterio");
+          return false;
+        }
+      }
+
+      console.log("  ✅✅ Fila ACEPTADA - cumple todos los criterios");
+      return true;
+    });
+    
+    console.log(`\n📊 Resultado final: ${filtered.length} de ${this._originalBody.length} filas`);
+  }
+
+  this._filteredBody = filtered;
+  this._body = this._sortingManager.applySorts(
+    this._filteredBody,
+    this.headers
+  );
+
+  // ✅ LOGS CRÍTICOS AL FINAL:
+  console.log("=== DESPUÉS DE APLICAR FILTROS ===");
+  console.log("this._filteredBody.length:", this._filteredBody.length);
+  console.log("this._body.length:", this._body.length);
+  console.log("this._body:", this._body);
+
+  this.updateTableContent();
+}
+
+private evaluateParameterFilter(
+  cellValue: any,
+  parameter: HeaderFilterParameter,
+  columnType?: string
+): boolean {
+  const operator = parameter.operator;
+  const filterValue = parameter.value;
+  const filterValue2 = parameter.value2;
+
+  console.log("      🔧 evaluateParameterFilter");
+  console.log("        cellValue:", cellValue, `(tipo: ${typeof cellValue})`);
+  console.log("        operator:", operator);
+  console.log("        filterValue:", filterValue);
+  console.log("        filterValue2:", filterValue2);
+  console.log("        columnType:", columnType);
+
+  // ✅ NUEVO: Operador "in" para arrays
+  if (operator === "in") {
+    if (!Array.isArray(filterValue)) {
+      console.log("        ❌ 'in': filterValue no es un array");
+      return false;
+    }
+    const result = filterValue.includes(cellValue);
+    console.log(`        in : ${JSON.stringify(filterValue)}.includes(${cellValue}) = ${result}`);
+    return result;
+  }
+
+  // ✅ NUEVO: Operador "notin" para arrays
+  if (operator === "notin") {
+    if (!Array.isArray(filterValue)) {
+      console.log("        ❌ 'notin': filterValue no es un array");
+      return false;
+    }
+    const result = !filterValue.includes(cellValue);
+    console.log(`        notin : !${JSON.stringify(filterValue)}.includes(${cellValue}) = ${result}`);
+    return result;
+  }
+
+  // Para tipos numéricos, asegurar que ambos valores sean números
+  if (columnType === "number") {
+    const numCellValue = typeof cellValue === "number" ? cellValue : parseFloat(cellValue);
+    const numFilterValue = typeof filterValue === "number" ? filterValue : parseFloat(filterValue);
+    
+    console.log("        numCellValue:", numCellValue);
+    console.log("        numFilterValue:", numFilterValue);
+    
+    if (isNaN(numCellValue) || isNaN(numFilterValue)) {
+      console.log("        ❌ Valores inválidos (NaN)");
+      return false;
     }
 
-    this._filteredBody = filtered;
-    this._body = this._sortingManager.applySorts(
-      this._filteredBody,
-      this.headers
-    );
-
-    this.updateTableContent();
+    switch (operator) {
+      case "=":
+      case "equals":
+        const equalsResult = numCellValue === numFilterValue;
+        console.log(`        = : ${numCellValue} === ${numFilterValue} = ${equalsResult}`);
+        return equalsResult;
+      case "<>":
+      case "notequal":
+        const notEqualResult = numCellValue !== numFilterValue;
+        console.log(`        <> : ${numCellValue} !== ${numFilterValue} = ${notEqualResult}`);
+        return notEqualResult;
+      case "<":
+        const ltResult = numCellValue < numFilterValue;
+        console.log(`        < : ${numCellValue} < ${numFilterValue} = ${ltResult}`);
+        return ltResult;
+      case ">":
+        const gtResult = numCellValue > numFilterValue;
+        console.log(`        > : ${numCellValue} > ${numFilterValue} = ${gtResult}`);
+        return gtResult;
+      case "<=":
+        const lteResult = numCellValue <= numFilterValue;
+        console.log(`        <= : ${numCellValue} <= ${numFilterValue} = ${lteResult}`);
+        return lteResult;
+      case ">=":
+        const gteResult = numCellValue >= numFilterValue;
+        console.log(`        >= : ${numCellValue} >= ${numFilterValue} = ${gteResult}`);
+        return gteResult;
+      case "between":
+        if (filterValue2 === undefined) {
+          console.log("        ❌ between: falta filterValue2");
+          return false;
+        }
+        const numFilterValue2 = typeof filterValue2 === "number" ? filterValue2 : parseFloat(filterValue2);
+        if (isNaN(numFilterValue2)) {
+          console.log("        ❌ between: filterValue2 es NaN");
+          return false;
+        }
+        const betweenResult = numCellValue >= numFilterValue && numCellValue <= numFilterValue2;
+        console.log(`        between : ${numCellValue} >= ${numFilterValue} && ${numCellValue} <= ${numFilterValue2} = ${betweenResult}`);
+        return betweenResult;
+      default:
+        console.log("        ❌ Operador no reconocido:", operator);
+        return false;
+    }
   }
+
+  // Para fechas
+  if (columnType === "date") {
+    const cellDate = new Date(cellValue);
+    const filterDate = new Date(filterValue);
+    
+    if (isNaN(cellDate.getTime()) || isNaN(filterDate.getTime())) return false;
+
+    switch (operator) {
+      case "=":
+      case "equals":
+        return cellDate.getTime() === filterDate.getTime();
+      case "<>":
+      case "notequal":
+        return cellDate.getTime() !== filterDate.getTime();
+      case "<":
+        return cellDate.getTime() < filterDate.getTime();
+      case ">":
+        return cellDate.getTime() > filterDate.getTime();
+      case "<=":
+        return cellDate.getTime() <= filterDate.getTime();
+      case ">=":
+        return cellDate.getTime() >= filterDate.getTime();
+      case "between":
+        if (filterValue2 === undefined) return false;
+        const filterDate2 = new Date(filterValue2);
+        if (isNaN(filterDate2.getTime())) return false;
+        return cellDate.getTime() >= filterDate.getTime() && 
+               cellDate.getTime() <= filterDate2.getTime();
+      default:
+        return false;
+    }
+  }
+
+  // Para strings
+  const cellStr = String(cellValue).toLowerCase();
+  const filterStr = String(filterValue).toLowerCase();
+
+  switch (operator) {
+    case "=":
+    case "equals":
+      return cellStr === filterStr;
+    case "<>":
+    case "notequal":
+      return cellStr !== filterStr;
+    case "contains":
+      return cellStr.includes(filterStr);
+    case "notcontains":
+      return !cellStr.includes(filterStr);
+    case "startswith":
+      return cellStr.startsWith(filterStr);
+    case "endswith":
+      return cellStr.endsWith(filterStr);
+    default:
+      return false;
+  }
+}
+
+
+
 
   private normalizeDateToISOString(value: any): string {
     if (!value) return "";
@@ -757,22 +926,22 @@ export class Gridie extends HTMLElement {
 
     const str = String(value);
 
-    console.log(
-      `🔍 normalizeDateToYYYYMMDD input:`,
-      value,
-      `(type: ${typeof value})`
-    );
+    // console.log(
+    //   `🔍 normalizeDateToYYYYMMDD input:`,
+    //   value,
+    //   `(type: ${typeof value})`
+    // );
 
     // ✅ Caso 1: Ya es "YYYY-MM-DD" exacto → retornar directo
     if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-      console.log(`  ✅ Already normalized:`, str);
+   //   console.log(`  ✅ Already normalized:`, str);
       return str;
     }
 
     // ✅ Caso 2: Es ISO con hora "YYYY-MM-DDTHH:mm:ss" → extraer fecha
     if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
       const result = str.split("T")[0];
-      console.log(`  ✅ Extracted from ISO:`, result);
+    //  console.log(`  ✅ Extracted from ISO:`, result);
       return result;
     }
 
@@ -780,47 +949,64 @@ export class Gridie extends HTMLElement {
     try {
       const date = new Date(value);
       if (!isNaN(date.getTime())) {
-        console.log(`  📅 Date object:`, date);
+       //`  📅 Date object:`, date);
         const year = date.getUTCFullYear();
         const month = String(date.getUTCMonth() + 1).padStart(2, "0");
         const day = String(date.getUTCDate()).padStart(2, "0");
         const result = `${year}-${month}-${day}`;
-        console.log(`  ✅ Converted to:`, result);
+       // console.log(`  ✅ Converted to:`, result);
         return result;
       }
     } catch (error) {
-      console.log(`  ❌ Error:`, error);
+      console.log(`   Error:`, error);
     }
 
-    console.log(`  ❌ Could not normalize`);
+    //console.log(`  Could not normalize`);
     return "";
   }
 
-  private updateTableContent(): void {
-    const thead = this.shadow.querySelector("thead tr:first-child");
-    if (thead) {
-      const headers = this.headers;
-      thead.innerHTML = headers
-        .map(
-          (header, index) => `
-      <th 
-        class="${header.sortable ? "sortable" : ""}" 
-        data-column-index="${index}"
-      >
-        ${this.renderHeaderFilterIcon(index, header)}
-        ${header.label}
-        ${this.getSortIndicator(index)}
-      </th>
+private updateTableContent(): void {
+  // ✅ AGREGAR STACK TRACE:
+  console.trace("📊 updateTableContent llamado desde:");
+  console.log("📊 Filas a renderizar:", this.body.length);
+  
+  const thead = this.shadow.querySelector("thead tr:first-child");
+  if (thead) {
+    const headers = this.headers;
+    thead.innerHTML = headers
+      .map(
+        (header, index) => `
+     <th 
+  class="${header.sortable ? "sortable" : ""}" 
+  data-column-index="${index}"
+>
+  <div class="th-content">
+
+    <div class="th-filter-icon">
+      ${this.renderHeaderFilterIcon(index, header)}
+    </div>
+
+    <div class="th-label">
+      ${header.label}
+    </div>
+
+    <div class="th-sort-indicator">
+      ${this.getSortIndicator(index)}
+    </div>
+
+  </div>
+</th>
+
     `
-        )
-        .join("");
+      )
+      .join("");
 
-      this.attachHeaderEvents();
-      this.attachHeaderFilterEvents();
-    }
-
-    this.renderTableBody();
+    this.attachHeaderEvents();
+    this.attachHeaderFilterEvents();
   }
+
+  this.renderTableBody();
+}
 
   private renderTableBody(): void {
     const tbody = this.shadow.querySelector("tbody");
@@ -1175,67 +1361,74 @@ export class Gridie extends HTMLElement {
   }
 
   // Generar opciones para el Header Filter
-  private generateHeaderFilterOptions(
-    columnIndex: number,
-    header: GridieHeaderConfig
-  ): any[] {
-    const config = header.filters?.headerFilter;
-    if (!config) return [];
+ private generateHeaderFilterOptions(
+  columnIndex: number,
+  header: GridieHeaderConfig
+): any[] {
+  const config = header.filters?.headerFilter;
+  if (!config) return [];
 
-    const options: any[] = [];
+  const options: any[] = [];
 
-    // Si hay parameters definidos, agregarlos primero
-    if (config.parameters && config.parameters.length > 0) {
-      config.parameters.forEach((param) => {
-        const count = this.countMatchingRows(columnIndex, param);
-        options.push({
-          text: param.text,
-          value: param, // El parameter completo con operator, value, etc.
-          count: count,
-          isParameter: true,
-        });
+  // Si hay parameters definidos, agregarlos primero
+  if (config.parameters && config.parameters.length > 0) {
+    config.parameters.forEach((param) => {
+      const count = this.countMatchingRows(columnIndex, param);
+      options.push({
+        text: param.text,
+        // ✅ CORRECCIÓN: No incluir 'text' en el value, solo los datos del filtro
+        value: {
+          operator: param.operator,
+          value: param.value,
+          value2: param.value2,
+          unit: param.unit,
+          year: param.year,
+        },
+        count: count,
+        isParameter: true,
       });
+    });
 
-      // Agregar separador si también hay values
-      if (config.values && config.values.length > 0) {
-        options.push({ separator: true });
-      }
-    }
-
-    // Si hay values definidos, agregarlos
+    // Agregar separador si también hay values
     if (config.values && config.values.length > 0) {
-      config.values.forEach((val) => {
-        const count = this.countValueOccurrences(columnIndex, val);
-        options.push({
-          text: this.formatValueForDisplay(val, header.type),
-          value: val,
-          count: count,
-          isParameter: false,
-        });
-      });
-    } else if (!config.parameters) {
-      // Si no hay ni parameters ni values, extraer valores únicos automáticamente
-      const uniqueValues = this.extractUniqueValues(columnIndex);
+      options.push({ separator: true });
+    }
+  }
 
-      // Si hay jerarquía de fechas, procesar diferente
-      if (config.dateHierarchy && config.dateHierarchy.length > 0) {
-        return this.generateDateHierarchy(columnIndex, uniqueValues, config);
-      }
-
-      // Valores únicos normales
-      uniqueValues.forEach((val) => {
-        const count = this.countValueOccurrences(columnIndex, val);
-        options.push({
-          text: this.formatValueForDisplay(val, header.type),
-          value: val,
-          count: count,
-          isParameter: false,
-        });
+  // Si hay values definidos, agregarlos
+  if (config.values && config.values.length > 0) {
+    config.values.forEach((val) => {
+      const count = this.countValueOccurrences(columnIndex, val);
+      options.push({
+        text: this.formatValueForDisplay(val, header.type),
+        value: val,
+        count: count,
+        isParameter: false,
       });
+    });
+  } else if (!config.parameters) {
+    // Si no hay ni parameters ni values, extraer valores únicos automáticamente
+    const uniqueValues = this.extractUniqueValues(columnIndex);
+
+    // Si hay jerarquía de fechas, procesar diferente
+    if (config.dateHierarchy && config.dateHierarchy.length > 0) {
+      return this.generateDateHierarchy(columnIndex, uniqueValues, config);
     }
 
-    return options;
+    // Valores únicos normales
+    uniqueValues.forEach((val) => {
+      const count = this.countValueOccurrences(columnIndex, val);
+      options.push({
+        text: this.formatValueForDisplay(val, header.type),
+        value: val,
+        count: count,
+        isParameter: false,
+      });
+    });
   }
+
+  return options;
+}
 
   // Extraer valores únicos de una columna
   private extractUniqueValues(columnIndex: number): any[] {
@@ -1250,11 +1443,11 @@ export class Gridie extends HTMLElement {
 
     const result = Array.from(values).sort();
 
-    // ✅ AGREGAR ESTO
-    console.log(
-      `🔍 extractUniqueValues for column ${columnIndex} (${this.headers[columnIndex]?.label}):`,
-      result
-    );
+ 
+    // console.log(
+    //   `🔍 extractUniqueValues for column ${columnIndex} (${this.headers[columnIndex]?.label}):`,
+    //   result
+    // );
 
     return result;
   }
@@ -1671,81 +1864,86 @@ export class Gridie extends HTMLElement {
     return "";
   }
 
+  // private applyHeaderFilters(): void {
+  //   // console.log("🔍 Applying header filters...");
+  //   // console.log(
+  //   //   "🔍 Active selections:",
+  //   //   Array.from(this._headerFilterSelections.entries())
+  //   // );
+
+  //   this.applyFiltersAndSorting();
+  //   // Filtrar _originalBody basado en selecciones
+  //   this._filteredBody = this._originalBody.filter((row: any) => {
+  //     // Por cada columna que tiene filtros activos
+  //     for (const [
+  //       colIndex,
+  //       selections,
+  //     ] of this._headerFilterSelections.entries()) {
+  //       if (selections.size === 0) continue;
+
+  //       const cellValue = this.getCellValueByPosition(row, colIndex);
+
+  //       let matchFound = false;
+  //       for (const selection of selections) {
+  //         if (typeof selection === "object" && selection.operator) {
+  //           // Es un parameter de fecha - evaluar
+  //           const date = new Date(cellValue);
+  //           if (isNaN(date.getTime())) continue;
+
+  //           switch (selection.operator) {
+  //             case "year":
+  //               if (date.getFullYear() === selection.value) matchFound = true;
+  //               break;
+  //             case "month":
+  //               if (
+  //                 date.getFullYear() === selection.year &&
+  //                 date.getMonth() === selection.value
+  //               ) {
+  //                 matchFound = true;
+  //               }
+  //               break;
+  //           }
+  //         } else {
+  //           // Es un valor simple o fecha específica
+  //           if (
+  //             cellValue === selection ||
+  //             String(cellValue) === String(selection)
+  //           ) {
+  //             matchFound = true;
+  //             break;
+  //           }
+  //         }
+  //       }
+
+  //       if (!matchFound) return false;
+  //     }
+
+  //     return true;
+  //   });
+
+  //   // console.log(
+  //   //   "✅ Filtered from",
+  //   //   this._originalBody.length,
+  //   //   "to",
+  //   //   this._filteredBody.length,
+  //   //   "rows"
+  //   // );
+
+  //   // Aplicar sorting
+  //   this._body = this._sortingManager.applySorts(
+  //     this._filteredBody,
+  //     this.headers
+  //   );
+
+  //   // Re-renderizar
+  //   this.updateTableContent();
+  // }
+
+
   private applyHeaderFilters(): void {
-    console.log("🔍 Applying header filters...");
-    console.log(
-      "🔍 Active selections:",
-      Array.from(this._headerFilterSelections.entries())
-    );
-
-    this.applyFiltersAndSorting();
-    // Filtrar _originalBody basado en selecciones
-    this._filteredBody = this._originalBody.filter((row: any) => {
-      // Por cada columna que tiene filtros activos
-      for (const [
-        colIndex,
-        selections,
-      ] of this._headerFilterSelections.entries()) {
-        if (selections.size === 0) continue;
-
-        const cellValue = this.getCellValueByPosition(row, colIndex);
-
-        let matchFound = false;
-        for (const selection of selections) {
-          if (typeof selection === "object" && selection.operator) {
-            // Es un parameter de fecha - evaluar
-            const date = new Date(cellValue);
-            if (isNaN(date.getTime())) continue;
-
-            switch (selection.operator) {
-              case "year":
-                if (date.getFullYear() === selection.value) matchFound = true;
-                break;
-              case "month":
-                if (
-                  date.getFullYear() === selection.year &&
-                  date.getMonth() === selection.value
-                ) {
-                  matchFound = true;
-                }
-                break;
-            }
-          } else {
-            // Es un valor simple o fecha específica
-            if (
-              cellValue === selection ||
-              String(cellValue) === String(selection)
-            ) {
-              matchFound = true;
-              break;
-            }
-          }
-        }
-
-        if (!matchFound) return false;
-      }
-
-      return true;
-    });
-
-    console.log(
-      "✅ Filtered from",
-      this._originalBody.length,
-      "to",
-      this._filteredBody.length,
-      "rows"
-    );
-
-    // Aplicar sorting
-    this._body = this._sortingManager.applySorts(
-      this._filteredBody,
-      this.headers
-    );
-
-    // Re-renderizar
-    this.updateTableContent();
-  }
-
+ 
+  this.applyFiltersAndSorting();
+}
   private flattenHierarchy(
     options: any[],
     parentExpanded: boolean = true
@@ -1756,18 +1954,18 @@ export class Gridie extends HTMLElement {
       // Siempre agregar la opción actual
       flattened.push(option);
 
-      console.log("🔍 flattenHierarchy - Processing:", {
-        text: option.text,
-        expandable: option.expandable,
-        expanded: option.expanded,
-        hasChildren: option.children?.length,
-        parentExpanded: parentExpanded,
-        willShowChildren:
-          option.children &&
-          option.children.length > 0 &&
-          option.expanded &&
-          parentExpanded,
-      });
+      // console.log("🔍 flattenHierarchy - Processing:", {
+      //   text: option.text,
+      //   expandable: option.expandable,
+      //   expanded: option.expanded,
+      //   hasChildren: option.children?.length,
+      //   parentExpanded: parentExpanded,
+      //   willShowChildren:
+      //     option.children &&
+      //     option.children.length > 0 &&
+      //     option.expanded &&
+      //     parentExpanded,
+      // });
 
       // ✅ FIX: Si tiene hijos Y está expandida Y el padre está expandido
       if (
@@ -1776,160 +1974,146 @@ export class Gridie extends HTMLElement {
         option.expanded &&
         parentExpanded
       ) {
-        console.log(
-          '  ➡️ Expanding children of "' +
-            option.text +
-            '" (' +
-            option.children.length +
-            " children)"
-        );
+        // console.log(
+        //   '  ➡️ Expanding children of "' +
+        //     option.text +
+        //     '" (' +
+        //     option.children.length +
+        //     " children)"
+        // );
         // Recursivamente aplanar los hijos
         const childrenFlattened = this.flattenHierarchy(option.children, true);
-        console.log(
-          "  ➡️ Added " + childrenFlattened.length + " flattened children"
-        );
+        // console.log(
+        //   "  ➡️ Added " + childrenFlattened.length + " flattened children"
+        // );
         flattened.push(...childrenFlattened);
       }
     });
 
-    console.log("🔍 flattenHierarchy result: " + flattened.length + " items");
+    //console.log("🔍 flattenHierarchy result: " + flattened.length + " items");
     return flattened;
   }
 
   private showHeaderFilterMenu(columnIndex: number, icon: HTMLElement): void {
-    const container = this.shadowRoot!.querySelector(
-      ".gridie-container"
-    ) as HTMLElement;
-    if (!container) return;
+  const container = this.shadowRoot!.querySelector(
+    ".gridie-container"
+  ) as HTMLElement;
+  if (!container) return;
 
-    const headers = this.headers;
+  const headers = this.headers;
 
-    if (!headers || columnIndex >= headers.length) {
-      console.error(
-        "Header index out of bounds:",
-        columnIndex,
-        "headers:",
-        headers
-      );
-      return;
-    }
+  if (!headers || columnIndex >= headers.length) {
+    console.error(
+      "Header index out of bounds:",
+      columnIndex,
+      "headers:",
+      headers
+    );
+    return;
+  }
 
-    if (!this._originalBody || this._originalBody.length === 0) {
-      console.error("No data available");
-      return;
-    }
+  if (!this._originalBody || this._originalBody.length === 0) {
+    console.error("No data available");
+    return;
+  }
 
-    const containerRect = container.getBoundingClientRect();
-    const iconRect = icon.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  const iconRect = icon.getBoundingClientRect();
 
-    const header = headers[columnIndex];
-    const headerFilterConfig = header.filters?.headerFilter;
-    if (!headerFilterConfig || !headerFilterConfig.visible) return;
+  const header = headers[columnIndex];
+  const headerFilterConfig = header.filters?.headerFilter;
+  if (!headerFilterConfig || !headerFilterConfig.visible) return;
 
-    const selectedValues =
-      this._headerFilterSelections.get(columnIndex) || new Set<any>();
+  const selectedValues =
+    this._headerFilterSelections.get(columnIndex) || new Set<any>();
 
-    // Generar opciones
-    let allOptions: any[] = [];
+  // Generar opciones
+  let allOptions: any[] = [];
 
-    // 1. Parameters (si existen)
-    if (headerFilterConfig.parameters) {
-      allOptions = allOptions.concat(
-        headerFilterConfig.parameters.map((param: HeaderFilterParameter) => ({
+  // 1. Parameters (si existen)
+  if (headerFilterConfig.parameters) {
+    allOptions = allOptions.concat(
+      headerFilterConfig.parameters.map((param: HeaderFilterParameter) => {
+        const count = this.countMatchingRows(columnIndex, param);
+        return {
           text: param.text,
           value: param,
-          count: null,
+          count: count,
           isParameter: true,
-        }))
-      );
-    }
-
-    // 2. Jerarquía de fechas (si existe)
-    if (headerFilterConfig.dateHierarchy && header.type === "date") {
-      const uniqueValues = this.extractUniqueValues(columnIndex);
-      const dateOptions = this.generateDateHierarchy(
-        columnIndex,
-        uniqueValues,
-        headerFilterConfig
-      );
-      allOptions = allOptions.concat(dateOptions);
-    }
-    // 3. Values predefinidos (si existen y NO hay jerarquía de fechas)
-    else if (headerFilterConfig.values) {
-      allOptions = allOptions.concat(
-        headerFilterConfig.values.map((val: any) => {
-          const count = this._originalBody.filter(
-            (row: any) => this.getCellValueByPosition(row, columnIndex) === val
-          ).length;
-          return { text: String(val), value: val, count, isParameter: false };
-        })
-      );
-    }
-    // 4. Valores únicos automáticos (si NO hay values ni jerarquía)
-    else if (!headerFilterConfig.dateHierarchy) {
-      const uniqueValues = this.extractUniqueValues(columnIndex);
-      allOptions = allOptions.concat(
-        Array.from(uniqueValues).map((val: any) => {
-          const displayValue = this.formatCellValue(val, header);
-          const count = this._originalBody.filter(
-            (row: any) => this.getCellValueByPosition(row, columnIndex) === val
-          ).length;
-          return {
-            text: displayValue,
-            value: val,
-            count: headerFilterConfig.showCount !== false ? count : null,
-            isParameter: false,
-          };
-        })
-      );
-    }
-
-    // Filtrar opciones según búsqueda
-    let filteredOptions = allOptions;
-    const searchTerm = (
-      this._headerFilterSearchValues.get(columnIndex) || ""
-    ).toLowerCase();
-    if (searchTerm) {
-      filteredOptions = allOptions.filter((opt: any) =>
-        this.normalizeStringForSearch(opt.text).includes(
-          this.normalizeStringForSearch(searchTerm)
-        )
-      );
-    }
-
-    // Aplanar jerarquía si existe
-    const hasHierarchy = allOptions.some((opt: any) => opt.expandable);
-
-    console.log("🔍 hasHierarchy:", hasHierarchy);
-    console.log("🔍 allOptions before flatten:", allOptions.length);
-
-    if (hasHierarchy) {
-      filteredOptions = this.flattenHierarchy(filteredOptions);
-      console.log("🔍 filteredOptions after flatten:", filteredOptions.length);
-      console.log("🔍 filteredOptions sample:", filteredOptions.slice(0, 5));
-    }
-
-    const showSelectAll = !hasHierarchy;
-
-    // Calcular estados de checkboxes
-    const selectableOptions = filteredOptions.filter(
-      (opt: any) => !opt.expandable
+        };
+      })
     );
-    const allSelected =
-      selectableOptions.length > 0 &&
-      selectableOptions.every((opt: any) => {
-        if (opt.isParameter) {
-          return Array.from(selectedValues).some(
-            (val: any) =>
-              typeof val === "object" &&
-              val.operator === opt.value.operator &&
-              JSON.stringify(val) === JSON.stringify(opt.value)
-          );
-        }
-        return selectedValues.has(opt.value);
-      });
+  }
 
-    const someSelected = selectableOptions.some((opt: any) => {
+  // 2. Jerarquía de fechas (si existe)
+  if (headerFilterConfig.dateHierarchy && header.type === "date") {
+    const uniqueValues = this.extractUniqueValues(columnIndex);
+    const dateOptions = this.generateDateHierarchy(
+      columnIndex,
+      uniqueValues,
+      headerFilterConfig
+    );
+    allOptions = allOptions.concat(dateOptions);
+  }
+  // 3. Values predefinidos (si existen y NO hay jerarquía de fechas)
+  else if (headerFilterConfig.values) {
+    allOptions = allOptions.concat(
+      headerFilterConfig.values.map((val: any) => {
+        const count = this._originalBody.filter(
+          (row: any) => this.getCellValueByPosition(row, columnIndex) === val
+        ).length;
+        return { text: String(val), value: val, count, isParameter: false };
+      })
+    );
+  }
+  // 4. Valores únicos automáticos (si NO hay values ni jerarquía)
+  else if (!headerFilterConfig.dateHierarchy) {
+    const uniqueValues = this.extractUniqueValues(columnIndex);
+    allOptions = allOptions.concat(
+      Array.from(uniqueValues).map((val: any) => {
+        const displayValue = this.formatCellValue(val, header);
+        const count = this._originalBody.filter(
+          (row: any) => this.getCellValueByPosition(row, columnIndex) === val
+        ).length;
+        return {
+          text: displayValue,
+          value: val,
+          count: headerFilterConfig.showCount !== false ? count : null,
+          isParameter: false,
+        };
+      })
+    );
+  }
+
+  // Filtrar opciones según búsqueda
+  let filteredOptions = allOptions;
+  const searchTerm = (
+    this._headerFilterSearchValues.get(columnIndex) || ""
+  ).toLowerCase();
+  if (searchTerm) {
+    filteredOptions = allOptions.filter((opt: any) =>
+      this.normalizeStringForSearch(opt.text).includes(
+        this.normalizeStringForSearch(searchTerm)
+      )
+    );
+  }
+
+  // Aplanar jerarquía si existe
+  const hasHierarchy = allOptions.some((opt: any) => opt.expandable);
+
+  if (hasHierarchy) {
+    filteredOptions = this.flattenHierarchy(filteredOptions);
+  }
+
+  const showSelectAll = !hasHierarchy;
+
+  // Calcular estados de checkboxes
+  const selectableOptions = filteredOptions.filter(
+    (opt: any) => !opt.expandable
+  );
+  const allSelected =
+    selectableOptions.length > 0 &&
+    selectableOptions.every((opt: any) => {
       if (opt.isParameter) {
         return Array.from(selectedValues).some(
           (val: any) =>
@@ -1941,169 +2125,183 @@ export class Gridie extends HTMLElement {
       return selectedValues.has(opt.value);
     });
 
-    // Crear menú
-    const menu = document.createElement("div");
-    menu.className = "header-filter-menu";
-    menu.dataset.columnIndex = String(columnIndex);
+  const someSelected = selectableOptions.some((opt: any) => {
+    if (opt.isParameter) {
+      return Array.from(selectedValues).some(
+        (val: any) =>
+          typeof val === "object" &&
+          val.operator === opt.value.operator &&
+          JSON.stringify(val) === JSON.stringify(opt.value)
+      );
+    }
+    return selectedValues.has(opt.value);
+  });
 
-    // Calcular posición
-    const x = iconRect.left - containerRect.left + container.scrollLeft;
-    const y = iconRect.bottom - containerRect.top + container.scrollTop + 4;
+  // Crear menú
+  const menu = document.createElement("div");
+  menu.className = "header-filter-menu";
+  menu.dataset.columnIndex = String(columnIndex);
 
-    menu.style.position = "absolute";
-    menu.style.left = `${x}px`;
-    menu.style.top = `${y}px`;
+  // Calcular posición
+  const x = iconRect.left - containerRect.left + container.scrollLeft;
+  const y = iconRect.bottom - containerRect.top + container.scrollTop + 4;
 
-    let menuHTML = "";
+  menu.style.position = "absolute";
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
 
-    // Campo de búsqueda (si está habilitado)
-    if (headerFilterConfig.search) {
-      const searchValue = this._headerFilterSearchValues.get(columnIndex) || "";
-      menuHTML += `
-      <div class="header-filter-search">
-        <input 
-          type="text" 
-          placeholder="Buscar..." 
-          data-search-column="${columnIndex}"
-          value="${searchValue}"
-        />
-      </div>
-    `;
+  let menuHTML = "";
+
+  // Campo de búsqueda (si está habilitado)
+  if (headerFilterConfig.search) {
+    const searchValue = this._headerFilterSearchValues.get(columnIndex) || "";
+    menuHTML += `
+    <div class="header-filter-search">
+      <input 
+        type="text" 
+        placeholder="Buscar..." 
+        data-search-column="${columnIndex}"
+        value="${searchValue}"
+      />
+    </div>
+  `;
+  }
+
+  // Checkbox "Seleccionar todos" (solo si no hay jerarquía)
+  if (showSelectAll) {
+    menuHTML += `
+    <div class="header-filter-option header-filter-select-all" data-action="select-all">
+      <input 
+        type="checkbox" 
+        ${allSelected ? "checked" : ""} 
+        ${someSelected && !allSelected ? "data-indeterminate='true'" : ""}
+      />
+      <span>Seleccionar todos</span>
+    </div>
+    ${
+      headerFilterConfig.parameters &&
+      allOptions.some((opt: any) => !opt.isParameter)
+        ? '<div class="header-filter-separator"></div>'
+        : ""
+    }
+  `;
+  }
+
+  // ✅ CORRECCIÓN: Renderizar cada opción con su índice correcto
+  filteredOptions.forEach((option: any, optIndex: number) => {
+    // Skip separators
+    if (option.separator) {
+      menuHTML += `<div class="header-filter-separator"></div>`;
+      return;
     }
 
-    // Checkbox "Seleccionar todos" (solo si no hay jerarquía)
-    if (showSelectAll) {
-      menuHTML += `
-      <div class="header-filter-option header-filter-select-all" data-action="select-all">
-        <input 
-          type="checkbox" 
-          ${allSelected ? "checked" : ""} 
-          ${someSelected && !allSelected ? "data-indeterminate='true'" : ""}
-        />
-        <span>Seleccionar todos</span>
-      </div>
-      ${
-        headerFilterConfig.parameters &&
-        allOptions.some((opt: any) => !opt.isParameter)
-          ? '<div class="header-filter-separator"></div>'
-          : ""
+    const isSelected = (() => {
+  if (option.expandable) return false;
+
+  if (option.isParameter) {
+    // ✅ CORRECCIÓN: Comparación más robusta para parameters
+    return Array.from(selectedValues).some((val: any) => {
+      if (typeof val !== "object" || !val.operator) return false;
+      
+      // Comparar operator
+      if (val.operator !== option.value.operator) return false;
+      
+      // Comparar value (puede ser array para "in")
+      if (Array.isArray(val.value) && Array.isArray(option.value.value)) {
+        // Comparar arrays
+        if (val.value.length !== option.value.value.length) return false;
+        return val.value.every((v: any) => option.value.value.includes(v));
       }
-    `;
-    }
-
-    // Opciones
-    // Opciones
-    filteredOptions.forEach((option: any, index: number) => {
-      const isSelected = (() => {
-        if (option.expandable) return false;
-
-        if (option.isParameter) {
-          return Array.from(selectedValues).some(
-            (val: any) =>
-              typeof val === "object" &&
-              val.operator === option.value.operator &&
-              JSON.stringify(val) === JSON.stringify(option.value)
-          );
-        }
-        return selectedValues.has(option.value);
-      })();
-
-      const level = option.level || 0;
-      const indent = level * 16;
-
-      if (option.expandable) {
-        const expandIcon = option.expanded ? "collapse-icon" : "expand-icon";
-        console.log(
-          `🔍 Rendering expandable [${index}]:`,
-          option.text,
-          "expanded:",
-          option.expanded,
-          "id:",
-          option.id
-        );
-
-        menuHTML += `
-      <div class="header-filter-option-parent" 
-           data-option-index="${index}" 
-           data-option-id="${option.id || ""}"
-           style="padding-left: ${indent + 12}px;"
-           title="ID: ${option.id || "NO-ID"}">
-        <span class="header-filter-expand-icon">${getFilterIcon(
-          expandIcon
-        )}</span>
-        <span>${option.text}${
-          option.count !== null && option.count !== undefined
-            ? ` (${option.count})`
-            : ""
-        }</span>
-      </div>
-    `;
-      } else {
-        console.log(
-          `🔍 Rendering selectable [${index}]:`,
-          option.text,
-          "value:",
-          option.value
-        );
-
-        menuHTML += `
-      <div class="header-filter-option" 
-           data-option-index="${index}"
-           data-option-value="${
-             typeof option.value === "object"
-               ? JSON.stringify(option.value)
-               : option.value
-           }"
-           style="padding-left: ${indent + 12}px;">
-        <input type="checkbox" ${isSelected ? "checked" : ""} />
-        <span>${option.text}${
-          option.count !== null && option.count !== undefined
-            ? ` (${option.count})`
-            : ""
-        }</span>
-      </div>
-    `;
-      }
+      
+      // Comparar valores simples
+      if (val.value !== option.value.value) return false;
+      
+      // Comparar value2 si existe
+      if (val.value2 !== option.value.value2) return false;
+      
+      return true;
     });
+  }
+  return selectedValues.has(option.value);
+})();
 
-    menu.innerHTML = menuHTML;
+    const level = option.level || 0;
+    const indent = level * 16;
 
-    if (showSelectAll) {
-      setTimeout(() => {
-        const selectAllCheckbox = menu.querySelector(
-          '.header-filter-select-all input[type="checkbox"]'
-        ) as HTMLInputElement;
-        if (
-          selectAllCheckbox &&
-          selectAllCheckbox.dataset.indeterminate === "true"
-        ) {
-          selectAllCheckbox.indeterminate = true;
-        }
-      }, 0);
+    if (option.expandable) {
+      const expandIcon = option.expanded ? "collapse-icon" : "expand-icon";
+
+      menuHTML += `
+    <div class="header-filter-option-parent" 
+         data-option-index="${optIndex}" 
+         data-option-id="${option.id || ""}"
+         style="padding-left: ${indent + 12}px;">
+      <span class="header-filter-expand-icon">${getFilterIcon(
+        expandIcon
+      )}</span>
+      <span>${option.text}${
+        option.count !== null && option.count !== undefined
+          ? ` (${option.count})`
+          : ""
+      }</span>
+    </div>
+  `;
+    } else {
+      // ✅ CRÍTICO: Asegurar que data-option-index siempre tenga un valor válido
+      menuHTML += `
+    <div class="header-filter-option" 
+         data-option-index="${optIndex}"
+         style="padding-left: ${indent + 12}px;">
+      <input type="checkbox" ${isSelected ? "checked" : ""} />
+      <span>${option.text}${
+        option.count !== null && option.count !== undefined
+          ? ` (${option.count})`
+          : ""
+      }</span>
+    </div>
+  `;
     }
+  });
 
-    this._headerFilterMenu = menu;
-    container.appendChild(menu);
+  menu.innerHTML = menuHTML;
 
+  if (showSelectAll) {
     setTimeout(() => {
-      const menuRect = menu.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-
-      if (menuRect.bottom > containerRect.bottom) {
-        const overflow = menuRect.bottom - containerRect.bottom;
-        container.style.minHeight = `${
-          container.offsetHeight + overflow + 20
-        }px`;
+      const selectAllCheckbox = menu.querySelector(
+        '.header-filter-select-all input[type="checkbox"]'
+      ) as HTMLInputElement;
+      if (
+        selectAllCheckbox &&
+        selectAllCheckbox.dataset.indeterminate === "true"
+      ) {
+        selectAllCheckbox.indeterminate = true;
       }
     }, 0);
-
-    this.attachHeaderFilterMenuEvents(
-      columnIndex,
-      filteredOptions,
-      allOptions,
-      hasHierarchy
-    );
   }
+
+  this._headerFilterMenu = menu;
+  container.appendChild(menu);
+
+  setTimeout(() => {
+    const menuRect = menu.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    if (menuRect.bottom > containerRect.bottom) {
+      const overflow = menuRect.bottom - containerRect.bottom;
+      container.style.minHeight = `${
+        container.offsetHeight + overflow + 20
+      }px`;
+    }
+  }, 0);
+
+  this.attachHeaderFilterMenuEvents(
+    columnIndex,
+    filteredOptions,
+    allOptions,
+    hasHierarchy
+  );
+
+}
 
   // Normalizar string para búsqueda
   private normalizeStringForSearch(str: string): string {
@@ -2115,163 +2313,136 @@ export class Gridie extends HTMLElement {
 
   // Adjuntar eventos al menú del Header Filter
   // Adjuntar eventos al menú del Header Filter
-  private attachHeaderFilterMenuEvents(
-    columnIndex: number,
-    filteredOptions: any[],
-    allOptions: any[],
-    hasHierarchy: boolean
-  ): void {
-    const menu = this._headerFilterMenu;
-    if (!menu) return;
+private attachHeaderFilterMenuEvents(
+  columnIndex: number,
+  filteredOptions: any[],
+  allOptions: any[],
+  hasHierarchy: boolean
+): void {
+  const menu = this._headerFilterMenu;
+  if (!menu) return;
 
-    console.log("🔍🔍🔍 attachHeaderFilterMenuEvents called");
-    console.log("🔍 filteredOptions:", filteredOptions);
-    console.log("🔍 filteredOptions.length:", filteredOptions.length);
-    console.log(
-      "🔍 filteredOptions map:",
-      filteredOptions.map(
-        (o, i) => `[${i}] ${o.text} (expandable: ${o.expandable})`
-      )
-    );
+  // ✅ CRÍTICO: Prevenir que clics dentro del menú lo cierren
+  menu.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
 
-    // ✅ CRÍTICO: Prevenir que clics dentro del menú lo cierren
-    menu.addEventListener("click", (e) => {
+  // Evento: Campo de búsqueda
+  const searchInput = menu.querySelector(
+    "input[data-search-column]"
+  ) as HTMLInputElement;
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      e.stopPropagation();
+      const value = (e.target as HTMLInputElement).value;
+      this._headerFilterSearchValues.set(columnIndex, value);
+
+      const scrollTop = menu.scrollTop;
+      this.reopenHeaderFilterMenu(columnIndex);
+
+      setTimeout(() => {
+        if (this._headerFilterMenu) {
+          this._headerFilterMenu.scrollTop = scrollTop;
+          const newSearchInput = this._headerFilterMenu.querySelector(
+            "input[data-search-column]"
+          ) as HTMLInputElement;
+          if (newSearchInput) {
+            newSearchInput.focus();
+            newSearchInput.setSelectionRange(
+              newSearchInput.value.length,
+              newSearchInput.value.length
+            );
+          }
+        }
+      }, 0);
+    });
+
+    searchInput.addEventListener("click", (e) => {
       e.stopPropagation();
     });
-
-    // Evento: Campo de búsqueda
-    const searchInput = menu.querySelector(
-      "input[data-search-column]"
-    ) as HTMLInputElement;
-    if (searchInput) {
-      searchInput.addEventListener("input", (e) => {
-        e.stopPropagation();
-        const value = (e.target as HTMLInputElement).value;
-        this._headerFilterSearchValues.set(columnIndex, value);
-
-        const scrollTop = menu.scrollTop;
-        this.reopenHeaderFilterMenu(columnIndex);
-
-        setTimeout(() => {
-          if (this._headerFilterMenu) {
-            this._headerFilterMenu.scrollTop = scrollTop;
-            const newSearchInput = this._headerFilterMenu.querySelector(
-              "input[data-search-column]"
-            ) as HTMLInputElement;
-            if (newSearchInput) {
-              newSearchInput.focus();
-              newSearchInput.setSelectionRange(
-                newSearchInput.value.length,
-                newSearchInput.value.length
-              );
-            }
-          }
-        }, 0);
-      });
-
-      searchInput.addEventListener("click", (e) => {
-        e.stopPropagation();
-      });
-    }
-
-    // Evento: Seleccionar todos
-    const selectAllOption = menu.querySelector(".header-filter-select-all");
-    if (selectAllOption) {
-      selectAllOption.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.handleHeaderFilterSelectAll(columnIndex, allOptions);
-      });
-    }
-
-    // ✅ Evento para expand/collapse de parents (jerarquías)
-    const parentElements = menu.querySelectorAll(
-      ".header-filter-option-parent"
-    );
-    console.log("🔍 Found parent elements:", parentElements.length);
-
-    parentElements.forEach((parent, domIndex) => {
-      const optionIndexStr = (parent as HTMLElement).dataset.optionIndex;
-      const optionIndex = parseInt(optionIndexStr!);
-
-      console.log(
-        `🔍 Parent DOM[${domIndex}] → data-option-index="${optionIndexStr}" → parsed: ${optionIndex}`
-      );
-
-      // ✅ CRÍTICO: Usar el índice correcto del array aplanado
-      const optionData = filteredOptions[optionIndex];
-
-      if (!optionData) {
-        console.error(`❌ No optionData at filteredOptions[${optionIndex}]`);
-        console.log("❌ filteredOptions keys:", Object.keys(filteredOptions));
-        console.log("❌ filteredOptions.length:", filteredOptions.length);
-        return;
-      }
-
-      console.log(
-        `   ✅ Found: "${optionData.text}" (id: ${optionData.id}, expandable: ${optionData.expandable})`
-      );
-
-      parent.addEventListener("click", (e) => {
-        e.stopPropagation();
-        console.log(
-          "🖱️ Parent clicked:",
-          optionData.text,
-          "ID:",
-          optionData.id
-        );
-        this.handleHeaderFilterExpandToggle(columnIndex, optionData);
-      });
-    });
-
-    // ✅ Evento: Opciones individuales (seleccionables)
-    const selectableElements = menu.querySelectorAll(".header-filter-option");
-    console.log("🔍 Found selectable elements:", selectableElements.length);
-
-    selectableElements.forEach((option, domIndex) => {
-      const optionIndexStr = (option as HTMLElement).dataset.optionIndex;
-      const optionIndex = parseInt(optionIndexStr!);
-
-      console.log(
-        `🔍 Selectable DOM[${domIndex}] → data-option-index="${optionIndexStr}" → parsed: ${optionIndex}`
-      );
-
-      // ✅ CRÍTICO: Usar el índice correcto del array aplanado
-      const optionData = filteredOptions[optionIndex];
-
-      if (!optionData) {
-        console.error(`❌ No optionData at filteredOptions[${optionIndex}]`);
-        console.log("❌ filteredOptions keys:", Object.keys(filteredOptions));
-        console.log("❌ filteredOptions.length:", filteredOptions.length);
-        return;
-      }
-
-      if (optionData.separator) {
-        console.log(`   ⏭️ Skipping separator at [${optionIndex}]`);
-        return;
-      }
-
-      console.log(
-        `   ✅ Found: "${optionData.text}" (value: ${
-          typeof optionData.value === "object"
-            ? JSON.stringify(optionData.value)
-            : optionData.value
-        })`
-      );
-
-      option.addEventListener("click", (e) => {
-        e.stopPropagation();
-        console.log(
-          "🖱️🖱️🖱️ Option clicked:",
-          optionData.text,
-          "value:",
-          optionData.value
-        );
-        this.handleHeaderFilterOptionClick(columnIndex, optionData);
-      });
-    });
-
-    console.log("🔍🔍🔍 attachHeaderFilterMenuEvents completed");
   }
+
+  // Evento: Seleccionar todos
+  const selectAllOption = menu.querySelector(".header-filter-select-all");
+  if (selectAllOption) {
+    selectAllOption.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.handleHeaderFilterSelectAll(columnIndex, allOptions);
+    });
+  }
+
+  // ✅ Evento para expand/collapse de parents (jerarquías)
+  const parentElements = menu.querySelectorAll(
+    ".header-filter-option-parent"
+  );
+
+  parentElements.forEach((parent) => {
+    const optionIndexStr = (parent as HTMLElement).dataset.optionIndex;
+    
+    if (!optionIndexStr) {
+      console.error("❌ Parent element missing data-option-index attribute");
+      return;
+    }
+    
+    const optionIndex = parseInt(optionIndexStr);
+    
+    if (isNaN(optionIndex)) {
+      console.error("❌ Invalid option index:", optionIndexStr);
+      return;
+    }
+
+    const optionData = filteredOptions[optionIndex];
+
+    if (!optionData) {
+      console.error(`❌ No optionData at filteredOptions[${optionIndex}]`);
+      return;
+    }
+
+    parent.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.handleHeaderFilterExpandToggle(columnIndex, optionData);
+    });
+  });
+
+  // ✅ CORRECCIÓN CRÍTICA: Excluir el "select-all" del selector
+  // Cambiado de ".header-filter-option" a ".header-filter-option:not(.header-filter-select-all)"
+  const selectableElements = menu.querySelectorAll(
+    ".header-filter-option:not(.header-filter-select-all)"
+  );
+
+  selectableElements.forEach((option) => {
+    const optionIndexStr = (option as HTMLElement).dataset.optionIndex;
+    
+    if (!optionIndexStr) {
+      console.error("❌ Selectable element missing data-option-index attribute");
+      console.log("Element HTML:", (option as HTMLElement).outerHTML);
+      return;
+    }
+    
+    const optionIndex = parseInt(optionIndexStr);
+    
+    if (isNaN(optionIndex)) {
+      console.error("❌ Invalid option index:", optionIndexStr);
+      return;
+    }
+
+    const optionData = filteredOptions[optionIndex];
+
+    if (!optionData) {
+      console.error(`❌ No optionData at filteredOptions[${optionIndex}]`);
+      return;
+    }
+
+    if (optionData.separator) {
+      return;
+    }
+
+    option.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.handleHeaderFilterOptionClick(columnIndex, optionData);
+    });
+  });
+}
 
   // ✅ NUEVO: Manejar expand/collapse de jerarquías
   // ✅ NUEVO: Manejar expand/collapse de jerarquías de fechas
@@ -2279,14 +2450,14 @@ export class Gridie extends HTMLElement {
     columnIndex: number,
     optionData: any
   ): void {
-    console.log("=== EXPAND TOGGLE ===");
-    console.log("columnIndex:", columnIndex);
-    console.log("optionData:", optionData);
-    console.log("optionData.id:", optionData.id);
-    console.log(
-      "Current expanded state:",
-      this._headerFilterExpandedState.get(optionData.id)
-    );
+    // console.log("=== EXPAND TOGGLE ===");
+    // console.log("columnIndex:", columnIndex);
+    // console.log("optionData:", optionData);
+    // console.log("optionData.id:", optionData.id);
+    // console.log(
+    //   "Current expanded state:",
+    //   this._headerFilterExpandedState.get(optionData.id)
+    // );
 
     if (!optionData || !optionData.id) {
       console.error("❌ Option data missing or no ID:", optionData);
@@ -2297,16 +2468,16 @@ export class Gridie extends HTMLElement {
       this._headerFilterExpandedState.get(optionData.id) || false;
     const newState = !currentState;
 
-    console.log(
-      `✅ Setting ${optionData.id} from ${currentState} to ${newState}`
-    );
+    // console.log(
+    //   `✅ Setting ${optionData.id} from ${currentState} to ${newState}`
+    // );
 
     this._headerFilterExpandedState.set(optionData.id, newState);
 
-    console.log(
-      "All expanded states:",
-      Array.from(this._headerFilterExpandedState.entries())
-    );
+    // console.log(
+    //   "All expanded states:",
+    //   Array.from(this._headerFilterExpandedState.entries())
+    // );
 
     const scrollTop = this._headerFilterMenu?.scrollTop || 0;
 
@@ -2319,86 +2490,139 @@ export class Gridie extends HTMLElement {
     }, 0);
   }
   // Manejar clic en "Seleccionar todos"
-  private handleHeaderFilterSelectAll(
-    columnIndex: number,
-    allOptions: any[]
-  ): void {
-    const selectedValues =
-      this._headerFilterSelections.get(columnIndex) || new Set<any>();
-    const selectableOptions = allOptions.filter(
-      (opt: any) => !opt.separator && !opt.expandable
+private handleHeaderFilterSelectAll(
+  columnIndex: number,
+  allOptions: any[]
+): void {
+  const selectedValues =
+    this._headerFilterSelections.get(columnIndex) || new Set<any>();
+  const selectableOptions = allOptions.filter(
+    (opt: any) => !opt.separator && !opt.expandable
+  );
+
+  // ✅ CORRECCIÓN: Verificar correctamente si todos están seleccionados
+  const allSelected =
+    selectableOptions.length > 0 &&
+    selectableOptions.every((opt: any) => {
+      if (opt.isParameter && typeof opt.value === "object") {
+        const cleanParam = {
+          operator: opt.value.operator,
+          value: opt.value.value,
+          ...(opt.value.value2 !== undefined && { value2: opt.value.value2 }),
+          ...(opt.value.unit !== undefined && { unit: opt.value.unit }),
+          ...(opt.value.year !== undefined && { year: opt.value.year }),
+        };
+        
+        return Array.from(selectedValues).some((selected: any) => {
+          if (typeof selected !== "object" || !selected.operator) return false;
+          
+          // Comparar operator
+          if (selected.operator !== cleanParam.operator) return false;
+          
+          // Comparar value (puede ser array para "in")
+          if (Array.isArray(selected.value) && Array.isArray(cleanParam.value)) {
+            if (selected.value.length !== cleanParam.value.length) return false;
+            return selected.value.every((v: any) => cleanParam.value.includes(v));
+          }
+          
+          // Comparar valores simples
+          if (selected.value !== cleanParam.value) return false;
+          
+          // Comparar value2 si existe
+          if (selected.value2 !== cleanParam.value2) return false;
+          
+          return true;
+        });
+      }
+      return selectedValues.has(opt.value);
+    });
+
+  if (allSelected) {
+    // Deseleccionar todos
+    this._headerFilterSelections.delete(columnIndex);
+  } else {
+    // Seleccionar todos
+    const newSelection = new Set<any>();
+    selectableOptions.forEach((opt: any) => {
+      if (opt.isParameter && typeof opt.value === "object") {
+        const cleanParam = {
+          operator: opt.value.operator,
+          value: opt.value.value,
+          ...(opt.value.value2 !== undefined && { value2: opt.value.value2 }),
+          ...(opt.value.unit !== undefined && { unit: opt.value.unit }),
+          ...(opt.value.year !== undefined && { year: opt.value.year }),
+        };
+        newSelection.add(cleanParam);
+      } else {
+        newSelection.add(opt.value);
+      }
+    });
+    this._headerFilterSelections.set(columnIndex, newSelection);
+  }
+
+  this.applyFiltersAndSorting();
+
+  this.reopenHeaderFilterMenu(columnIndex);
+}
+  // Manejar clic en opción individual
+private handleHeaderFilterOptionClick(
+  columnIndex: number,
+  optionData: any
+): void {
+  console.log("=== handleHeaderFilterOptionClick ===");
+  console.log("columnIndex:", columnIndex);
+  console.log("optionData:", optionData);
+  
+  const selectedValues =
+    this._headerFilterSelections.get(columnIndex) || new Set<any>();
+  const newSelection = new Set(selectedValues);
+
+  // Toggle selección
+  if (optionData.isParameter) {
+    console.log("Es un parameter");
+    
+    // ✅ CORRECCIÓN: Limpiar el objeto parameter antes de comparar/guardar
+    const cleanParameter = {
+      operator: optionData.value.operator,
+      value: optionData.value.value,
+      ...(optionData.value.value2 !== undefined && { value2: optionData.value.value2 }),
+      ...(optionData.value.unit !== undefined && { unit: optionData.value.unit }),
+      ...(optionData.value.year !== undefined && { year: optionData.value.year }),
+    };
+    
+    console.log("Clean parameter:", cleanParameter);
+    
+    const existingParam = Array.from(newSelection).find(
+      (val: any) =>
+        typeof val === "object" &&
+        val.operator === cleanParameter.operator &&
+        JSON.stringify(val) === JSON.stringify(cleanParameter)
     );
 
-    // ✅ FIX: Verificar correctamente si todos están seleccionados
-    const allSelected =
-      selectableOptions.length > 0 &&
-      selectableOptions.every((opt: any) => {
-        if (opt.isParameter && typeof opt.value === "object") {
-          return Array.from(selectedValues).some(
-            (selected: any) =>
-              typeof selected === "object" &&
-              selected.operator === opt.value.operator &&
-              JSON.stringify(selected) === JSON.stringify(opt.value)
-          );
-        }
-        return selectedValues.has(opt.value);
-      });
-
-    if (allSelected) {
-      // Deseleccionar todos
-      this._headerFilterSelections.delete(columnIndex);
+    if (existingParam) {
+      console.log("Removiendo parameter existente");
+      newSelection.delete(existingParam);
     } else {
-      // Seleccionar todos
-      const newSelection = new Set<any>();
-      selectableOptions.forEach((opt: any) => {
-        newSelection.add(opt.value);
-      });
-      this._headerFilterSelections.set(columnIndex, newSelection);
+      console.log("Agregando clean parameter:", cleanParameter);
+      newSelection.add(cleanParameter);
     }
-
-    // ✅ APLICAR FILTROS
-    this.applyHeaderFilters();
-
-    this.reopenHeaderFilterMenu(columnIndex);
-  }
-  // Manejar clic en opción individual
-  private handleHeaderFilterOptionClick(
-    columnIndex: number,
-    optionData: any
-  ): void {
-    const selectedValues =
-      this._headerFilterSelections.get(columnIndex) || new Set<any>();
-    const newSelection = new Set(selectedValues);
-
-    // Toggle selección
-    if (optionData.isParameter) {
-      const existingParam = Array.from(newSelection).find(
-        (val: any) =>
-          typeof val === "object" &&
-          val.operator === optionData.value.operator &&
-          JSON.stringify(val) === JSON.stringify(optionData.value)
-      );
-
-      if (existingParam) {
-        newSelection.delete(existingParam);
-      } else {
-        newSelection.add(optionData.value);
-      }
+  } else {
+    console.log("Es un valor simple");
+    if (newSelection.has(optionData.value)) {
+      newSelection.delete(optionData.value);
     } else {
-      if (newSelection.has(optionData.value)) {
-        newSelection.delete(optionData.value);
-      } else {
-        newSelection.add(optionData.value);
-      }
+      newSelection.add(optionData.value);
     }
-
-    this._headerFilterSelections.set(columnIndex, newSelection);
-
-    // ✅ Usar método centralizado
-    this.applyHeaderFilters();
-
-    this.reopenHeaderFilterMenu(columnIndex);
   }
+
+  console.log("Nueva selección:", Array.from(newSelection));
+  this._headerFilterSelections.set(columnIndex, newSelection);
+
+  // ✅ Usar método centralizado
+  this.applyHeaderFilters();
+
+  this.reopenHeaderFilterMenu(columnIndex);
+}
   // Re-abrir el menú del Header Filter (mantener posición)
   private reopenHeaderFilterMenu(columnIndex: number): void {
     const icon = this.shadow.querySelector(
@@ -3157,6 +3381,26 @@ export class Gridie extends HTMLElement {
         width: 100%;
         height: 100%;
       }
+
+      .content-th {
+    display: flex;
+}
+
+
+
+.th-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+}
+
+/* Para evitar saltos cuando no hay icono */
+.th-filter-icon,
+.th-sort-indicator {
+  display: flex;
+  align-items: center;
+}
     </style>
 
     <div class="gridie-container" data-gridie-id="${gridieId}">
@@ -3167,14 +3411,27 @@ export class Gridie extends HTMLElement {
             ${headers
               .map(
                 (header, index) => `
-              <th 
-                class="${header.sortable ? "sortable" : ""}" 
-                data-column-index="${index}"
-              >
-                ${this.renderHeaderFilterIcon(index, header)}
-                ${header.label}
-                ${this.getSortIndicator(index)}
-              </th>
+             <th 
+  class="${header.sortable ? "sortable" : ""}" 
+  data-column-index="${index}"
+>
+  <div class="th-content">
+
+    <div class="th-filter-icon">
+      ${this.renderHeaderFilterIcon(index, header)}
+    </div>
+
+    <div class="th-label">
+      ${header.label}
+    </div>
+
+    <div class="th-sort-indicator">
+      ${this.getSortIndicator(index)}
+    </div>
+
+  </div>
+</th>
+
             `
               )
               .join("")}

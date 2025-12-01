@@ -236,10 +236,10 @@ export function render(container: HTMLElement): void {
                 value: 50000,
                 value2: 65000,
               },
-              {
-                text: "Senior ($65k+)",
-                operator: ">=" as const,
-                value: 65000,
+             {
+                text: "Other (>$52k)",
+                operator: ">" as const,
+                value: 52000,
               },
             ],
           },

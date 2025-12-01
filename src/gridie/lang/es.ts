@@ -6,7 +6,7 @@ export const es = {
     sortAscending: "Ordenar Ascendente",
     sortDescending: "Ordenar Descendente",
     clearSorting: "Limpiar Ordenamiento",
-    clearAllSorting: "Limpiar Todo el Ordenamiento",
+    clearAllSorting: "Limpiar todo el Ordenamiento",
   },
   filtering: {
     operators: {

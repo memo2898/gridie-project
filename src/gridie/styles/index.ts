@@ -26,8 +26,8 @@ export const gridieStyles = `
   padding: 15px;
   text-align: left;
   font-weight: 600;
-  text-transform: uppercase;
-  font-size: 0.85em;
+
+  font-size: 0.93em;
   letter-spacing: 0.5px;
   user-select: none;
   position: relative;
@@ -46,6 +46,7 @@ export const gridieStyles = `
   color: #667eea;
   font-size: 0.9em;
   font-weight: bold;
+  white-space: nowrap;
 }
 
 /* ✅ NUEVO: Header Filter Icon */
