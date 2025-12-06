@@ -12,6 +12,7 @@ import {
   //contextMenuStyles,
   filterRowStyles,
   //headerFilterStyles,
+  paginationStyles
 } from "./styles";
 
 import { getFilterIcon } from "./assets/icons/filters";
@@ -41,11 +42,20 @@ export interface GridieConfig {
   id: string;
   headers: (string | GridieHeaderConfig)[];
   body: any[];
+  mode?: GridieMode;
   enableSort?: boolean;
   enableFilter?: boolean;
-  enablePagination?: boolean;
   language?: Language;
+  paging?: GridiePagingConfig;
+  loading?: boolean;
+  loadingText?: string;
+  
+  //  Campo identificador único
+  identityField?: string;
 }
+
+
+
 
 export interface HeaderFilterParameter {
   text: string;
@@ -73,6 +83,42 @@ export interface GridieFiltersConfig {
   headerFilter?: GridieHeaderFilterConfig;
 }
 
+
+//INTERFACES DE PAGINACION START
+// ============= INTERFACES DE PAGINACIÓN =============
+
+export interface GridiePageSizeConfig {
+  visible?: boolean;  // Default: true
+  default?: number;   // Default: 10
+  options?: number[]; // Default: [10, 25, 50, 100]
+}
+
+export interface GridieJumpToConfig {
+  visible?: boolean;     // Default: false
+  position?: "inline" | "below"; // Default: "inline"
+  buttonText?: string;   // Default: "→"
+}
+
+export interface GridieNavigationConfig {
+  visible?: boolean;       // Default: true
+  showPrevNext?: boolean;  // Default: true
+  showFirstLast?: boolean; // Default: true
+  maxButtons?: number;     // Default: 5
+  jumpTo?: GridieJumpToConfig;
+}
+
+export interface GridiePagingConfig {
+  enabled: boolean;
+  pageSize?: GridiePageSizeConfig;
+  showInfo?: boolean;      // Default: true
+  navigation?: GridieNavigationConfig;
+  position?: "bottom" | "top" | "both"; // Default: "bottom"
+}
+
+export type GridieMode = "client" | "server" | "infinite-scroll";
+//INTERFACES DE PAGINACION END
+
+
 export class Gridie extends HTMLElement {
   private shadow: ShadowRoot;
   private _id: string = "";
@@ -85,7 +131,7 @@ export class Gridie extends HTMLElement {
   private _sortingManager: SortingManager = new SortingManager();
   private _filteringManager: FilteringManager = new FilteringManager();
   private _language: Language = "es";
-  private _lang: LanguageStrings;
+private _lang: LanguageStrings = getLanguage("es");
   private _contextMenu: HTMLDivElement | null = null;
   private _globalStyleId = "gridie-global-styles";
   private _activeOperatorDropdown: number | null = null;
@@ -93,37 +139,495 @@ export class Gridie extends HTMLElement {
   private _operatorDropdownMenu: HTMLDivElement | null = null;
   private _activeHeaderFilterDropdown: number | null = null;
   private _headerFilterMenu: HTMLDivElement | null = null;
-  private _headerFilterSearchValues: Map<number, string> = new Map(); // Para búsqueda interna
-  // private _headerFilterSearchTerm: string = "";
+  private _headerFilterSearchValues: Map<number, string> = new Map();
   private _headerFilterSelections: Map<number, Set<any>> = new Map();
   private _headerFilterExpandedState: Map<string, boolean> = new Map();
+  private _currentPage: number = 1;
+  private _pageSize: number = 10;
+  private _totalItems: number = 0;
+  private _totalPages: number = 0;
+  private _pagedBody: any[] = [];
+  private _hasError: boolean = false;
+  private _errorMessage: string = "";
+  private _loading: boolean = false;
 
-  constructor(config?: GridieConfig) {
-    super();
-    this.shadow = this.attachShadow({ mode: "open" });
-    this._lang = getLanguage(this._language);
+
+  private _identityField?: string;
+  private _identityMap: Map<any, any> = new Map();
+
+constructor(config?: GridieConfig) {
+  super();
+  this.shadow = this.attachShadow({ mode: "open" });
+  
+  try {
+    // ✅ CORREGIDO: Obtener idioma del config PRIMERO
+    if (config?.language) {
+      this._language = config.language;
+    }
+    
+    this._lang = getLanguage(this._language); // ← Ahora usa el idioma correcto
     this.injectGlobalStyles();
 
     if (config) {
+      this.validateConfig(config);
       this._id = config.id;
       this._headers = config.headers;
       this._body = config.body;
       this._originalBody = [...config.body];
       this._filteredBody = [...config.body];
-      this._language = config.language || "es";
-      this._lang = getLanguage(this._language);
+      // ✅ Ya no necesitas reasignar _language ni _lang aquí
+      
+      this._identityField = config.identityField;
+      
       this._config = {
+        mode: config.mode || "client",
         enableSort: config.enableSort ?? true,
         enableFilter: config.enableFilter ?? false,
-        enablePagination: config.enablePagination ?? false,
         language: this._language,
+        paging: config.paging,
+        loading: config.loading,
+        loadingText: config.loadingText,
+        identityField: config.identityField,
       };
+      
+      if (this._config.paging?.enabled) {
+        this._pageSize = this._config.paging.pageSize?.default || 10;
+        this._totalItems = this._originalBody.length;
+        this._totalPages = Math.ceil(this._totalItems / this._pageSize) || 1;
+        this.updatePagination();
+      }
+      
+      if (this._identityField) {
+        this.buildIdentityMap();
+      }
     }
+  } catch (error) {
+    this._hasError = true;
+    this._errorMessage = error instanceof Error ? error.message : "Error desconocido";
+    console.error("❌ Error inicializando Gridie:", error);
   }
+}
 
   static get observedAttributes() {
     return ["id", "headers", "body", "config", "language"];
   }
+
+
+
+
+  // ========== MÉTODOS PÚBLICOS DE DATOS ==========
+
+/**
+ * Obtiene el body actual (después de filtros y sorting)
+ * @returns Array con los datos actuales filtrados
+ * @public
+ */
+public getBody(): any[] {
+  return [...this._body];
+}
+
+/**
+ * Obtiene el body original (sin filtros ni sorting)
+ * @returns Array con los datos originales
+ * @public
+ */
+public getOriginalBody(): any[] {
+  return [...this._originalBody];
+}
+
+/**
+ * Obtiene los datos de la página actual (si paginación está activa)
+ * @returns Array con los datos de la página visible
+ * @public
+ */
+public getPagedBody(): any[] {
+  return [...this._pagedBody];
+}
+
+/**
+ * Actualiza solo los headers manteniendo data
+ * @param headers - Nuevos headers
+ * @public
+ */
+public setHeaders(headers: (string | GridieHeaderConfig)[]): void {
+  if (!Array.isArray(headers) || headers.length === 0) {
+    throw new Error("Gridie.setHeaders: headers debe ser un array no vacío");
+  }
+  
+  this._headers = headers;
+  
+  // Limpiar filtros porque las columnas cambiaron
+  this._sortingManager.clearAll();
+  this._filteringManager.clearAll();
+  this._selectedOperators.clear();
+  this._headerFilterSearchValues.clear();
+  this._headerFilterSelections.clear();
+  this._headerFilterExpandedState.clear();
+  
+  this.render();
+  
+  console.log(`📊 Headers actualizados: ${headers.length} columnas`);
+}
+
+
+/**
+ * Re-renderiza la tabla sin cambiar datos ni estado
+ * Útil para actualizar después de cambios externos
+ * @public
+ */
+public refresh(): void {
+  this.render();
+  console.log("🔄 Tabla refrescada");
+}
+
+/**
+ * Re-aplica filtros y sorting sin cambiar datos originales
+ * Útil si modificaste datos individuales con updateRow
+ * @public
+ */
+public reapply(): void {
+  this.applyFiltersAndSorting();
+  console.log("🔄 Filtros y sorting re-aplicados");
+}
+  /**
+ * Valida la configuración antes de inicializar
+ * @private
+ */
+private validateConfig(config: GridieConfig): void {
+  if (!config.id) {
+    throw new Error("Gridie: El campo 'id' es requerido");
+  }
+
+  if (!config.headers || config.headers.length === 0) {
+    throw new Error("Gridie: El campo 'headers' es requerido y no puede estar vacío");
+  }
+
+  if (!Array.isArray(config.body)) {
+    throw new Error("Gridie: El campo 'body' debe ser un array");
+  }
+
+  // Validar paginación
+  if (config.paging?.enabled) {
+    const pageSize = config.paging.pageSize?.default;
+    if (pageSize && pageSize < 1) {
+      throw new Error("Gridie: pageSize debe ser mayor a 0");
+    }
+  }
+  
+  // Validar identityField si está configurado
+  if (config.identityField && config.body.length > 0) {
+    const firstRow = config.body[0];
+    if (typeof firstRow === 'object' && firstRow !== null && !Array.isArray(firstRow)) {
+      if (!(config.identityField in firstRow)) {
+        console.warn(`⚠️ Gridie: El identityField "${config.identityField}" no existe en las filas del body`);
+      }
+    }
+  }
+}
+
+
+/**
+ * Limpia todos los filtros (Filter Row + Header Filters)
+ * @public
+ */
+public clearAllFilters(): void {
+  // Limpiar Filter Row
+  this._filteringManager.clearAll();
+  
+  // Limpiar Header Filters
+  this._headerFilterSelections.clear();
+  this._headerFilterSearchValues.clear();
+  
+  // Limpiar operadores seleccionados
+  this._selectedOperators.clear();
+  
+  // Resetear a página 1
+  if (this._config.paging?.enabled) {
+    this._currentPage = 1;
+  }
+  
+  // Re-aplicar (sin filtros)
+  this.applyFiltersAndSorting();
+  
+  console.log("🗑️ Todos los filtros limpiados");
+}
+
+
+/**
+ * Establece el estado de carga de la tabla
+ * @param loading - true para mostrar loading, false para ocultar
+ * @public
+ */
+public setLoading(loading: boolean): void {
+  this._loading = loading;
+  
+  if (loading) {
+    this.showLoadingOverlay();
+  } else {
+    this.hideLoadingOverlay();
+  }
+}
+
+/**
+ * Muestra el overlay de loading
+ * @private
+ */
+private showLoadingOverlay(): void {
+  const container = this.shadow.querySelector('.gridie-container') as HTMLElement;
+  if (!container) return;
+
+  // Si ya existe, no crear otro
+  if (container.querySelector('.gridie-loading-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'gridie-loading-overlay';
+  overlay.innerHTML = `
+    <div class="gridie-loading-content">
+      <div class="gridie-spinner"></div>
+      <span class="gridie-loading-text">${this._config.loadingText || this._lang.table.loading || 'Cargando...'}</span>
+    </div>
+  `;
+  
+  container.style.position = 'relative';
+  container.appendChild(overlay);
+}
+
+
+/**
+ * Renderiza el estado de error
+ * @private
+ */
+private renderErrorState(): void {
+  this.shadow.innerHTML = `
+    <style>
+      .gridie-error-container {
+        padding: 40px 20px;
+        text-align: center;
+        border: 2px dashed #e74c3c;
+        border-radius: 8px;
+        background: #fff5f5;
+        font-family: Arial, sans-serif;
+      }
+      
+      .gridie-error-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+      }
+      
+      .gridie-error-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #e74c3c;
+        margin: 0 0 8px 0;
+      }
+      
+      .gridie-error-message {
+        font-size: 14px;
+        color: #666;
+        margin: 0 0 20px 0;
+      }
+      
+      .gridie-error-btn {
+        padding: 10px 20px;
+        background: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      
+      .gridie-error-btn:hover {
+        background: #c0392b;
+      }
+    </style>
+    
+    <div class="gridie-error-container">
+      <div class="gridie-error-icon">⚠️</div>
+      <h3 class="gridie-error-title">Error al cargar la tabla</h3>
+      <p class="gridie-error-message">${this._errorMessage}</p>
+      <button class="gridie-error-btn" onclick="location.reload()">
+        Recargar página
+      </button>
+    </div>
+  `;
+}
+/**
+ * Oculta el overlay de loading
+ * @private
+ */
+private hideLoadingOverlay(): void {
+  const overlay = this.shadow.querySelector('.gridie-loading-overlay');
+  if (overlay) {
+    overlay.remove();
+  }
+}
+
+
+  /**
+ * Construye el map de identidades para búsquedas O(1)
+ * @private
+ */
+private buildIdentityMap(): void {
+  if (!this._identityField) return;
+  
+  this._identityMap.clear();
+  
+  this._originalBody.forEach((row, index) => {
+    // Validar que sea un objeto
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+      console.warn(`⚠️ Gridie: La fila en índice ${index} no es un objeto. identityField solo funciona con objetos.`);
+      return;
+    }
+    
+    const identityValue = row[this._identityField!];
+    
+    // Validar que el campo exista
+    if (identityValue === undefined || identityValue === null) {
+      console.warn(`⚠️ Gridie: La fila en índice ${index} no tiene el campo "${this._identityField}".`);
+      return;
+    }
+    
+    // Detectar duplicados (warn + usar el primero)
+    if (this._identityMap.has(identityValue)) {
+      console.warn(`⚠️ Gridie: Valor duplicado "${identityValue}" encontrado en campo "${this._identityField}". Se usará la primera ocurrencia.`);
+      return;
+    }
+    
+    this._identityMap.set(identityValue, row);
+  });
+  
+  console.log(`🗂️ Identity map construido: ${this._identityMap.size} registros únicos (campo: "${this._identityField}")`);
+}
+
+
+// ========== MÉTODOS PÚBLICOS DE IDENTITY ==========
+
+/**
+ * Obtiene una fila por su valor de identidad
+ * @param value - Valor del campo identityField a buscar
+ * @returns La fila encontrada o undefined
+ * @example
+ * const user = gridie.getRowByIdentity('u1');
+ */
+public getRowByIdentity(value: any): any | undefined {
+  if (!this._identityField) {
+    console.error('❌ Gridie.getRowByIdentity: identityField no está configurado');
+    return undefined;
+  }
+  
+  const row = this._identityMap.get(value);
+  
+  if (!row) {
+    console.warn(`⚠️ Gridie.getRowByIdentity: No se encontró fila con ${this._identityField} = "${value}"`);
+  }
+  
+  return row;
+}
+
+/**
+ * Verifica si existe una fila con el valor de identidad
+ * @param value - Valor del campo identityField a buscar
+ * @returns true si existe, false si no
+ * @example
+ * if (gridie.hasRowByIdentity('u1')) { ... }
+ */
+public hasRowByIdentity(value: any): boolean {
+  if (!this._identityField) {
+    console.error('❌ Gridie.hasRowByIdentity: identityField no está configurado');
+    return false;
+  }
+  
+  return this._identityMap.has(value);
+}
+
+/**
+ * Actualiza una fila por su valor de identidad
+ * @param value - Valor del campo identityField a buscar
+ * @param data - Datos parciales o completos para actualizar
+ * @returns true si se actualizó, false si no se encontró
+ * @example
+ * gridie.updateRowByIdentity('u1', { edad: 26 });
+ */
+public updateRowByIdentity(value: any, data: Partial<any>): boolean {
+  if (!this._identityField) {
+    console.error('❌ Gridie.updateRowByIdentity: identityField no está configurado');
+    return false;
+  }
+  
+  const row = this._identityMap.get(value);
+  
+  if (!row) {
+    console.warn(`⚠️ Gridie.updateRowByIdentity: No se encontró fila con ${this._identityField} = "${value}"`);
+    return false;
+  }
+  
+  // Buscar índice en _originalBody
+  const index = this._originalBody.indexOf(row);
+  
+  if (index === -1) {
+    console.error('❌ Gridie.updateRowByIdentity: Inconsistencia interna - fila en map pero no en body');
+    return false;
+  }
+  
+  // Actualizar la fila (merge de datos)
+  this._originalBody[index] = {
+    ...this._originalBody[index],
+    ...data
+  };
+  
+  // Reconstruir map (por si cambió el identity value)
+  this.buildIdentityMap();
+  
+  // Re-aplicar filtros y sorting
+  this.applyFiltersAndSorting();
+  
+  console.log(`✅ Gridie.updateRowByIdentity: Fila actualizada (${this._identityField} = "${value}")`);
+  return true;
+}
+
+/**
+ * Elimina una fila por su valor de identidad
+ * @param value - Valor del campo identityField a buscar
+ * @returns true si se eliminó, false si no se encontró
+ * @example
+ * gridie.removeRowByIdentity('u1');
+ */
+public removeRowByIdentity(value: any): boolean {
+  if (!this._identityField) {
+    console.error('❌ Gridie.removeRowByIdentity: identityField no está configurado');
+    return false;
+  }
+  
+  const row = this._identityMap.get(value);
+  
+  if (!row) {
+    console.warn(`⚠️ Gridie.removeRowByIdentity: No se encontró fila con ${this._identityField} = "${value}"`);
+    return false;
+  }
+  
+  // Buscar índice en _originalBody
+  const index = this._originalBody.indexOf(row);
+  
+  if (index === -1) {
+    console.error('❌ Gridie.removeRowByIdentity: Inconsistencia interna - fila en map pero no en body');
+    return false;
+  }
+  
+  // Eliminar de _originalBody
+  this._originalBody.splice(index, 1);
+  
+  // Reconstruir map
+  this.buildIdentityMap();
+  
+  // Re-aplicar filtros y sorting
+  this.applyFiltersAndSorting();
+  
+  console.log(`🗑️ Gridie.removeRowByIdentity: Fila eliminada (${this._identityField} = "${value}")`);
+  return true;
+}
+
 
   connectedCallback() {
     this.render();
@@ -139,10 +643,10 @@ export class Gridie extends HTMLElement {
       this._operatorDropdownMenu = null;
     }
 
-    // ✅ Cerrar context menu si está abierto
+    //  Cerrar context menu si está abierto
     this.hideContextMenu();
 
-    // ✅ Remover header filter menu del shadow DOM
+    //  Remover header filter menu del shadow DOM
     if (this._headerFilterMenu) {
       const container = this.shadow.querySelector(
         ".gridie-container"
@@ -169,7 +673,7 @@ export class Gridie extends HTMLElement {
 
     const style = document.createElement("style");
     style.id = this._globalStyleId;
-    // ✅ Ya no necesitamos contextMenuStyles aquí
+    //  Ya no necesitamos contextMenuStyles aquí
     style.textContent = "";
 
     // Si el string está vacío, podemos omitir la inyección
@@ -178,47 +682,189 @@ export class Gridie extends HTMLElement {
     }
   }
 
-  setConfig(config: GridieConfig) {
-    this._id = config.id;
-    this._headers = config.headers;
-    this._body = config.body;
-    this._originalBody = [...config.body];
-    this._filteredBody = [...config.body];
-    this._language = config.language || "es";
-    this._lang = getLanguage(this._language);
-    this._config = {
-      enableSort: config.enableSort ?? true,
-      enableFilter: config.enableFilter ?? false,
-      enablePagination: config.enablePagination ?? false,
-      language: this._language,
-    };
-    this._sortingManager.clearAll();
-    this._filteringManager.clearAll();
-    this._selectedOperators.clear();
-    this._headerFilterSearchValues.clear(); // ✅ AGREGADO
-    this._headerFilterSelections.clear();
-    this._headerFilterExpandedState.clear();
-    this.render();
+public setConfig(config: GridieConfig) {
+  this._id = config.id;
+  this._headers = config.headers;
+  this._body = config.body;
+  this._originalBody = [...config.body];
+  this._filteredBody = [...config.body];
+  this._language = config.language || "es";
+  this._lang = getLanguage(this._language);
+  
+  // ✅ NUEVO: Actualizar identityField
+  this._identityField = config.identityField;
+  
+  this._config = {
+    mode: config.mode || "client",
+    enableSort: config.enableSort ?? true,
+    enableFilter: config.enableFilter ?? false,
+    language: this._language,
+    paging: config.paging,
+    identityField: config.identityField,
+  };
+  
+  this._sortingManager.clearAll();
+  this._filteringManager.clearAll();
+  this._selectedOperators.clear();
+  this._headerFilterSearchValues.clear();
+  this._headerFilterSelections.clear();
+  this._headerFilterExpandedState.clear();
+  
+  if (this._config.paging?.enabled) {
+    this._currentPage = 1;
+    this._pageSize = this._config.paging.pageSize?.default || 10;
+    this._totalItems = this._originalBody.length;
+    this._totalPages = Math.ceil(this._totalItems / this._pageSize) || 1;
+    this.updatePagination();
   }
+  
+  // ✅ NUEVO: Reconstruir identity map
+  if (this._identityField) {
+    this.buildIdentityMap();
+  }
+  
+  this.render();
+}
 
-  setData(config: { headers: (string | GridieHeaderConfig)[]; data: any[] }) {
-    this._headers = config.headers;
-    this._body = config.data;
-    this._originalBody = [...config.data];
-    this._filteredBody = [...config.data];
-    this._sortingManager.clearAll();
-    this._filteringManager.clearAll();
+
+
+
+
+public destroy(): void {
+  try {
+    document.removeEventListener("click", this.handleDocumentClick.bind(this));
+    
+    this.hideContextMenu();
+    this.closeOperatorDropdown();
+    this.closeHeaderFilterDropdown();
+    
+    this._eventHandlers.clear();
     this._selectedOperators.clear();
     this._headerFilterSearchValues.clear();
     this._headerFilterSelections.clear();
     this._headerFilterExpandedState.clear();
-    this.render();
+    
+    // ✅ NUEVO: Limpiar identity map
+    this._identityMap.clear();
+    
+    this._sortingManager.clearAll();
+    this._filteringManager.clearAll();
+    
+    this.remove();
+    
+    console.log("🗑️ Gridie destruido correctamente");
+  } catch (error) {
+    console.error("Error al destruir Gridie:", error);
   }
+}
 
-  addRow(row: any) {
-    this._originalBody.push(row);
-    this.applyFiltersAndSorting();
+public setBody(data: any[]): void {
+  if (!Array.isArray(data)) {
+    throw new Error("Gridie.setBody: data debe ser un array");
   }
+  
+  this._body = data;
+  this._originalBody = [...data];
+  this._filteredBody = [...data];
+  
+  this._sortingManager.clearAll();
+  this._filteringManager.clearAll();
+  this._selectedOperators.clear();
+  this._headerFilterSearchValues.clear();
+  this._headerFilterSelections.clear();
+  this._headerFilterExpandedState.clear();
+  
+  if (this._config.paging?.enabled) {
+    this._currentPage = 1;
+    this._totalItems = this._originalBody.length;
+    this._totalPages = Math.ceil(this._totalItems / this._pageSize) || 1;
+    this.updatePagination();
+  }
+  
+  // ✅ NUEVO: Reconstruir identity map
+  if (this._identityField) {
+    this.buildIdentityMap();
+  }
+  
+  this.render();
+  
+  console.log(`📊 Body actualizado: ${data.length} items`);
+}
+
+
+public setData(config: { headers: (string | GridieHeaderConfig)[]; data: any[] }) {
+  this._headers = config.headers;
+  this._body = config.data;
+  this._originalBody = [...config.data];
+  this._filteredBody = [...config.data];
+  
+  this._sortingManager.clearAll();
+  this._filteringManager.clearAll();
+  this._selectedOperators.clear();
+  this._headerFilterSearchValues.clear();
+  this._headerFilterSelections.clear();
+  this._headerFilterExpandedState.clear();
+  
+  if (this._config.paging?.enabled) {
+    this._currentPage = 1;
+    this._totalItems = this._originalBody.length;
+    this._totalPages = Math.ceil(this._totalItems / this._pageSize) || 1;
+    this.updatePagination();
+  }
+  
+  // ✅ NUEVO: Reconstruir identity map
+  if (this._identityField) {
+    this.buildIdentityMap();
+  }
+  
+  this.render();
+}
+
+/**
+ * Agrega una nueva fila a la tabla
+ * @param row - Fila a agregar
+ * @returns true si se agregó exitosamente, false si fue rechazada
+ */
+public addRow(row: any): boolean {
+  // ✅ VALIDACIÓN: Si hay identityField configurado, validar unicidad
+  if (this._identityField) {
+    // Validar que sea un objeto
+    if (typeof row !== 'object' || row === null || Array.isArray(row)) {
+      console.error('❌ Gridie.addRow: La fila debe ser un objeto cuando identityField está configurado');
+      return false;
+    }
+    
+    const identityValue = row[this._identityField];
+    
+    // Validar que tenga el campo requerido
+    if (identityValue === undefined || identityValue === null) {
+      console.error(`❌ Gridie.addRow: La fila no tiene el campo "${this._identityField}" requerido`);
+      return false;
+    }
+    
+    // ⚠️ Verificar duplicados
+    if (this._identityMap.has(identityValue)) {
+      console.error(`❌ Gridie.addRow: Ya existe una fila con ${this._identityField} = "${identityValue}". Operación rechazada.`);
+      return false;
+    }
+  }
+  
+  // Agregar a _originalBody
+  this._originalBody.push(row);
+  
+  // Reconstruir map si está configurado
+  if (this._identityField) {
+    this.buildIdentityMap();
+  }
+  
+  // Re-aplicar filtros y sorting
+  this.applyFiltersAndSorting();
+  
+  console.log(`✅ Gridie.addRow: Fila agregada exitosamente`);
+  return true;
+}
+
+
 
   removeRow(index: number) {
     const originalIndex = this._originalBody.findIndex(
@@ -245,6 +891,8 @@ export class Gridie extends HTMLElement {
     }
   }
 
+
+  
   get gridieId(): string {
     if (this._id) return this._id;
     const idAttr = this.getAttribute("id");
@@ -258,9 +906,11 @@ export class Gridie extends HTMLElement {
     return headers.map((header, index) => this.normalizeHeader(header, index));
   }
 
-  get body(): any[] {
-    return this._body.length > 0 ? this._body : [];
-  }
+get body(): any[] {
+  // ✅ CAMBIO: Siempre retornar _body (sin paginación aquí)
+  // La paginación se aplica en updatePagination() -> _pagedBody
+  return this._body.length > 0 ? this._body : [];
+}
 
   private getCurrentOperator(columnIndex: number): FilterOperator {
     const header = this.headers[columnIndex];
@@ -332,14 +982,14 @@ export class Gridie extends HTMLElement {
       case "date":
         const str = String(value);
 
-        // ✅ CORRECCIÓN: Si tiene hora, mostrar con el formato especificado
+        //  CORRECCIÓN: Si tiene hora, mostrar con el formato especificado
         if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
           const date = new Date(str);
           if (!isNaN(date.getTime())) {
-            // ✅ Usar timeFormat de la columna, por defecto 24h
+            //  Usar timeFormat de la columna, por defecto 24h
             const timeFormat = header.timeFormat || "24h";
 
-            // ✅ Formateo manual para control total
+            //  Formateo manual para control total
             const year = date.getUTCFullYear();
             const month = String(date.getUTCMonth() + 1).padStart(2, "0");
             const day = String(date.getUTCDate()).padStart(2, "0");
@@ -422,8 +1072,204 @@ export class Gridie extends HTMLElement {
         .join(" ");
     }
 
-    return this.formatCellValue(cellValue, header); // ✅ Pasar header completo
+    return this.formatCellValue(cellValue, header); //  Pasar header completo
   }
+
+// ============= MÉTODOS PÚBLICOS DE PAGINACIÓN =============
+
+/**
+ * Navega a una página específica
+ */
+public goToPage(page: number): void {
+  if (!this._config.paging?.enabled) {
+    console.warn("Paginación no está habilitada");
+    return;
+  }
+  
+  if (page < 1 || page > this._totalPages) {
+    console.warn(`Página ${page} fuera de rango (1-${this._totalPages})`);
+    return;
+  }
+  
+  if (page === this._currentPage) return;
+  
+  this._currentPage = page;
+  this.updatePagination();
+  
+  // ✅ NUEVO: Actualizar solo tabla y footer (no re-renderizar todo)
+  this.renderTableBody();
+  this.updatePaginationFooter();
+  
+  // Emitir evento
+  this.dispatchEvent(new CustomEvent('pagechange', {
+    detail: { 
+      page: this._currentPage,
+      pageSize: this._pageSize,
+      totalPages: this._totalPages,
+      totalItems: this._totalItems
+    }
+  }));
+  
+  console.log(`📄 Navegado a página ${page}`);
+}
+/**
+ * Navega a la página siguiente
+ */
+public nextPage(): void {
+  if (this._currentPage < this._totalPages) {
+    this.goToPage(this._currentPage + 1);
+  }
+}
+
+/**
+ * Navega a la página anterior
+ */
+public previousPage(): void {
+  if (this._currentPage > 1) {
+    this.goToPage(this._currentPage - 1);
+  }
+}
+
+/**
+ * Navega a la primera página
+ */
+public firstPage(): void {
+  this.goToPage(1);
+}
+
+/**
+ * Navega a la última página
+ */
+public lastPage(): void {
+  this.goToPage(this._totalPages);
+}
+
+/**
+ * Cambia el tamaño de página
+ */
+public setPageSize(size: number): void {
+  if (!this._config.paging?.enabled) {
+    console.warn("Paginación no está habilitada");
+    return;
+  }
+  
+  if (size < 1) {
+    console.warn("El tamaño de página debe ser mayor a 0");
+    return;
+  }
+  
+  if (size === this._pageSize) return;
+  
+  // Intentar mantener el primer item visible
+  const firstVisibleIndex = (this._currentPage - 1) * this._pageSize;
+  
+  this._pageSize = size;
+  this._currentPage = Math.floor(firstVisibleIndex / size) + 1;
+  
+  this.updatePagination();
+  this.updateTableContent();
+  
+  // ✅ CRÍTICO: Actualizar footer después de cambiar pageSize
+  this.updatePaginationFooter();
+  
+  // Emitir evento
+  this.dispatchEvent(new CustomEvent('pagechange', {
+    detail: { 
+      page: this._currentPage,
+      pageSize: this._pageSize,
+      totalPages: this._totalPages,
+      totalItems: this._totalItems
+    }
+  }));
+  
+  console.log(`📊 Tamaño de página cambiado a ${size}`);
+}
+
+
+/**
+ * Obtiene el tamaño de página actual
+ */
+public getPageSize(): number {
+  return this._pageSize;
+}
+
+/**
+ * Obtiene el número total de páginas
+ */
+public getTotalPages(): number {
+  return this._totalPages;
+}
+
+/**
+ * Obtiene la página actual
+ */
+public getCurrentPage(): number {
+  return this._currentPage;
+}
+
+/**
+ * Obtiene el total de items (después de filtros)
+ */
+public getTotalItems(): number {
+  return this._totalItems;
+}
+
+
+/**
+ * Calcula qué botones de página mostrar
+ * Ejemplo: < 1 ... 3 4 [5] 6 7 ... 20 >
+ */
+private calculatePageButtons(): (number | "ellipsis")[] {
+  const current = this._currentPage;
+  const total = this._totalPages;
+  const max = this._config.paging?.navigation?.maxButtons || 5;
+  
+  // Si hay pocas páginas, mostrar todas
+  if (total <= max + 2) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  
+  const buttons: (number | "ellipsis")[] = [];
+  
+  // Siempre mostrar primera página
+  buttons.push(1);
+  
+  // Calcular rango alrededor de página actual
+  const halfMax = Math.floor(max / 2);
+  let start = Math.max(2, current - halfMax);
+  let end = Math.min(total - 1, current + halfMax);
+  
+  // Ajustar si estamos cerca del inicio o fin
+  if (current <= halfMax + 1) {
+    end = Math.min(max, total - 1);
+  } else if (current >= total - halfMax) {
+    start = Math.max(total - max + 1, 2);
+  }
+  
+  // Ellipsis inicial
+  if (start > 2) {
+    buttons.push("ellipsis");
+  }
+  
+  // Páginas del rango
+  for (let i = start; i <= end; i++) {
+    buttons.push(i);
+  }
+  
+  // Ellipsis final
+  if (end < total - 1) {
+    buttons.push("ellipsis");
+  }
+  
+  // Siempre mostrar última página
+  if (total > 1) {
+    buttons.push(total);
+  }
+  
+  return buttons;
+}
+
+
 
   private handleHeaderClick(columnIndex: number): void {
     const header = this.headers[columnIndex];
@@ -455,7 +1301,7 @@ export class Gridie extends HTMLElement {
   private showContextMenu(x: number, y: number, columnIndex: number): void {
     this.hideContextMenu();
 
-    // ✅ CAMBIO: Crear dentro del shadow DOM con posición absoluta
+    //  CAMBIO: Crear dentro del shadow DOM con posición absoluta
     const container = this.shadowRoot!.querySelector(
       ".gridie-container"
     ) as HTMLElement;
@@ -519,11 +1365,11 @@ export class Gridie extends HTMLElement {
   }
 });
 
-    // ✅ CAMBIO: Agregar al contenedor en lugar de document.body
+    //  CAMBIO: Agregar al contenedor en lugar de document.body
     container.appendChild(menu);
     this._contextMenu = menu;
 
-    // ✅ Ajustar posición si se sale del contenedor
+    //  Ajustar posición si se sale del contenedor
     setTimeout(() => {
       const menuRect = menu.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
@@ -544,7 +1390,7 @@ export class Gridie extends HTMLElement {
 
   private hideContextMenu(): void {
     if (this._contextMenu) {
-      // ✅ CAMBIO: Remover del contenedor en lugar de document.body
+      //  CAMBIO: Remover del contenedor en lugar de document.body
       const container = this.shadow.querySelector(
         ".gridie-container"
       ) as HTMLElement;
@@ -575,47 +1421,181 @@ export class Gridie extends HTMLElement {
 
 
 
+private updatePagination(): void {
+  // Si paginación no está habilitada o no es modo cliente, salir
+  if (!this._config.paging?.enabled || this._config.mode !== "client") {
+    this._pagedBody = this._body;
+    return;
+  }
+
+  // ✅ CORRECCIÓN: Calcular totales basándose en _body (que ya está filtrado)
+  // _body ya contiene los datos filtrados después de applyFiltersAndSorting()
+  this._totalItems = this._body.length;
+  this._totalPages = Math.ceil(this._totalItems / this._pageSize) || 1;
+
+  // ✅ NUEVO: Si la página actual excede el total después del filtro, ir a la última página
+  if (this._currentPage > this._totalPages) {
+    this._currentPage = this._totalPages;
+  }
+  if (this._currentPage < 1) {
+    this._currentPage = 1;
+  }
+
+  // Calcular slice de datos para página actual
+  const startIndex = (this._currentPage - 1) * this._pageSize;
+  const endIndex = startIndex + this._pageSize;
+
+  this._pagedBody = this._body.slice(startIndex, endIndex);
+  
+  console.log(`📄 Paginación: Página ${this._currentPage}/${this._totalPages}, mostrando ${this._pagedBody.length} de ${this._totalItems} items (filtrados de ${this._originalBody.length} totales)`);
+}
+
+// private applyFiltersAndSorting(): void {
+//   // 1. Aplicar filtros de filterRow
+//   let filtered = this._filteringManager.applyFilters(
+//     this._originalBody,
+//     this.headers
+//   );
+
+//   // 2. ✅ APLICAR HEADER FILTERS (esto faltaba)
+//   if (this._headerFilterSelections.size > 0) {
+//     console.log("🔍 Aplicando header filters...");
+//     console.log("_headerFilterSelections.size:", this._headerFilterSelections.size);
+    
+//     filtered = filtered.filter((row: any) => {
+//       for (const [colIndex, selections] of this._headerFilterSelections.entries()) {
+//         if (selections.size === 0) continue;
+
+//         const cellValue = this.getCellValueByPosition(row, colIndex);
+//         const header = this.headers[colIndex];
+
+//         let matchFound = false;
+
+//         for (const selection of selections) {
+//           // ✅ CASO 1: Es un parameter con operator
+//           if (typeof selection === "object" && selection.operator) {
+//             // Para operadores de jerarquía de fechas (year, month)
+//             if (selection.operator === "year" || selection.operator === "month") {
+//               const date = new Date(cellValue);
+//               if (isNaN(date.getTime())) continue;
+
+//               switch (selection.operator) {
+//                 case "year":
+//                   if (date.getUTCFullYear() === selection.value)
+//                     matchFound = true;
+//                   break;
+//                 case "month":
+//                   if (
+//                     date.getUTCFullYear() === selection.year &&
+//                     date.getUTCMonth() === selection.value
+//                   ) {
+//                     matchFound = true;
+//                   }
+//                   break;
+//               }
+//             } else {
+//               // Para otros operadores (<, >, between, etc.)
+//               let valueToCompare = cellValue;
+              
+//               if (header.type === "number") {
+//                 valueToCompare = typeof cellValue === "string" 
+//                   ? parseFloat(cellValue) 
+//                   : cellValue;
+                
+//                 if (isNaN(valueToCompare)) continue;
+//               }
+              
+//               const result = this.evaluateParameterFilter(
+//                 valueToCompare,
+//                 selection,
+//                 header.type
+//               );
+
+//               if (result) {
+//                 matchFound = true;
+//               }
+//             }
+//           } else {
+//             // ✅ CASO 2: Es un valor simple o fecha específica
+//             if (header.type === "date") {
+//               const selectionStr = String(selection);
+//               const isHourFilter = /T\d{2}:\d{2}/.test(selectionStr);
+
+//               if (isHourFilter) {
+//                 const normalizedCell = this.normalizeDateTimeToISO(cellValue);
+//                 const normalizedSelection = this.normalizeDateTimeToISO(selection);
+
+//                 if (normalizedCell === normalizedSelection) {
+//                   matchFound = true;
+//                   break;
+//                 }
+//               } else {
+//                 const normalizedCell = this.normalizeDateToYYYYMMDD(cellValue);
+//                 const normalizedSelection = this.normalizeDateToYYYYMMDD(selection);
+
+//                 if (normalizedCell === normalizedSelection) {
+//                   matchFound = true;
+//                   break;
+//                 }
+//               }
+//             } else {
+//               if (
+//                 cellValue === selection ||
+//                 String(cellValue) === String(selection)
+//               ) {
+//                 matchFound = true;
+//                 break;
+//               }
+//             }
+//           }
+//         }
+
+//         if (!matchFound) return false;
+//       }
+
+//       return true;
+//     });
+//   }
+
+//   this._filteredBody = filtered;
+
+//   // 3. Aplicar sorting
+//   this._body = this._sortingManager.applySorts(
+//     this._filteredBody,
+//     this.headers
+//   );
+
+//   // 4. ✅ Aplicar paginación
+//   this.updatePagination();
+
+//   // 5. Actualizar UI
+//   this.updateTableContent();
+// }
+
 private applyFiltersAndSorting(): void {
+  // 1. Aplicar filtros de filterRow
   let filtered = this._filteringManager.applyFilters(
     this._originalBody,
     this.headers
   );
 
+  // 2. ✅ APLICAR HEADER FILTERS
   if (this._headerFilterSelections.size > 0) {
     console.log("🔍 Aplicando header filters...");
     console.log("_headerFilterSelections.size:", this._headerFilterSelections.size);
     
-    // ✅ LOG MÁS DETALLADO:
-    for (const [colIndex, selections] of this._headerFilterSelections.entries()) {
-      console.log(`  Columna ${colIndex}:`, selections);
-      console.log(`  Columna ${colIndex} - Array.from:`, Array.from(selections));
-      console.log(`  Columna ${colIndex} - selections.size:`, selections.size);
-    }
-    
     filtered = filtered.filter((row: any) => {
-      for (const [
-        colIndex,
-        selections,
-      ] of this._headerFilterSelections.entries()) {
+      for (const [colIndex, selections] of this._headerFilterSelections.entries()) {
         if (selections.size === 0) continue;
 
         const cellValue = this.getCellValueByPosition(row, colIndex);
         const header = this.headers[colIndex];
 
-        console.log(`\n📋 Evaluando fila - Columna ${colIndex} (${header.label})`);
-        console.log("  Valor de celda:", cellValue, `(tipo: ${typeof cellValue})`);
-        console.log("  Tipo de columna:", header.type);
-        console.log("  Selecciones para esta columna:", Array.from(selections));
-
         let matchFound = false;
 
         for (const selection of selections) {
-          console.log("  🔎 Evaluando selección:", selection);
-          
-          // ✅ CASO 1: Es un parameter con operator (incluyendo <, >, between, etc.)
+          // ✅ CASO 1: Es un parameter con operator
           if (typeof selection === "object" && selection.operator) {
-            console.log("    → Es un parameter con operator:", selection.operator);
-            
             // Para operadores de jerarquía de fechas (year, month)
             if (selection.operator === "year" || selection.operator === "month") {
               const date = new Date(cellValue);
@@ -636,8 +1616,7 @@ private applyFiltersAndSorting(): void {
                   break;
               }
             } else {
-              // ✅ Para otros operadores (<, >, <=, >=, between, etc.)
-              // Convertir cellValue al tipo correcto
+              // Para otros operadores (<, >, between, etc.)
               let valueToCompare = cellValue;
               
               if (header.type === "number") {
@@ -645,23 +1624,14 @@ private applyFiltersAndSorting(): void {
                   ? parseFloat(cellValue) 
                   : cellValue;
                 
-                console.log("    → Valor convertido a número:", valueToCompare);
-                
-                // Si después de parsear sigue siendo NaN, skip
-                if (isNaN(valueToCompare)) {
-                  console.log("    ❌ Valor es NaN, saltando");
-                  continue;
-                }
+                if (isNaN(valueToCompare)) continue;
               }
               
-              // Evaluar el filtro
               const result = this.evaluateParameterFilter(
                 valueToCompare,
                 selection,
                 header.type
               );
-
-              console.log("    → Resultado evaluación:", result);
 
               if (result) {
                 matchFound = true;
@@ -669,26 +1639,21 @@ private applyFiltersAndSorting(): void {
             }
           } else {
             // ✅ CASO 2: Es un valor simple o fecha específica
-            console.log("    → Es un valor simple");
             if (header.type === "date") {
               const selectionStr = String(selection);
               const isHourFilter = /T\d{2}:\d{2}/.test(selectionStr);
 
               if (isHourFilter) {
-                // Comparar fecha + hora
                 const normalizedCell = this.normalizeDateTimeToISO(cellValue);
-                const normalizedSelection =
-                  this.normalizeDateTimeToISO(selection);
+                const normalizedSelection = this.normalizeDateTimeToISO(selection);
 
                 if (normalizedCell === normalizedSelection) {
                   matchFound = true;
                   break;
                 }
               } else {
-                // Comparar solo fechas
                 const normalizedCell = this.normalizeDateToYYYYMMDD(cellValue);
-                const normalizedSelection =
-                  this.normalizeDateToYYYYMMDD(selection);
+                const normalizedSelection = this.normalizeDateToYYYYMMDD(selection);
 
                 if (normalizedCell === normalizedSelection) {
                   matchFound = true;
@@ -696,7 +1661,6 @@ private applyFiltersAndSorting(): void {
                 }
               }
             } else {
-              // Comparación simple para otros tipos
               if (
                 cellValue === selection ||
                 String(cellValue) === String(selection)
@@ -708,34 +1672,31 @@ private applyFiltersAndSorting(): void {
           }
         }
 
-        console.log("  ✅ Match encontrado para esta columna:", matchFound);
-
-        if (!matchFound) {
-          console.log("  ❌ Fila rechazada - no cumple criterio");
-          return false;
-        }
+        if (!matchFound) return false;
       }
 
-      console.log("  ✅✅ Fila ACEPTADA - cumple todos los criterios");
       return true;
     });
-    
-    console.log(`\n📊 Resultado final: ${filtered.length} de ${this._originalBody.length} filas`);
   }
 
   this._filteredBody = filtered;
+
+  // 3. Aplicar sorting
   this._body = this._sortingManager.applySorts(
     this._filteredBody,
     this.headers
   );
 
-  // ✅ LOGS CRÍTICOS AL FINAL:
-  console.log("=== DESPUÉS DE APLICAR FILTROS ===");
-  console.log("this._filteredBody.length:", this._filteredBody.length);
-  console.log("this._body.length:", this._body.length);
-  console.log("this._body:", this._body);
+  // 4. ✅ Aplicar paginación
+  this.updatePagination();
 
+  // 5. ✅ NUEVO: Actualizar UI completa (tabla + footer)
   this.updateTableContent();
+  
+  // ✅ CRÍTICO: Actualizar footer después de filtrar
+  if (this._config.paging?.enabled) {
+    this.updatePaginationFooter();
+  }
 }
 
 private evaluateParameterFilter(
@@ -754,7 +1715,7 @@ private evaluateParameterFilter(
   console.log("        filterValue2:", filterValue2);
   console.log("        columnType:", columnType);
 
-  // ✅ NUEVO: Operador "in" para arrays
+  //  NUEVO: Operador "in" para arrays
   if (operator === "in") {
     if (!Array.isArray(filterValue)) {
       console.log("        ❌ 'in': filterValue no es un array");
@@ -765,7 +1726,7 @@ private evaluateParameterFilter(
     return result;
   }
 
-  // ✅ NUEVO: Operador "notin" para arrays
+  //  NUEVO: Operador "notin" para arrays
   if (operator === "notin") {
     if (!Array.isArray(filterValue)) {
       console.log("        ❌ 'notin': filterValue no es un array");
@@ -932,20 +1893,20 @@ private evaluateParameterFilter(
     //   `(type: ${typeof value})`
     // );
 
-    // ✅ Caso 1: Ya es "YYYY-MM-DD" exacto → retornar directo
+    //  Caso 1: Ya es "YYYY-MM-DD" exacto → retornar directo
     if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-   //   console.log(`  ✅ Already normalized:`, str);
+   //   console.log(`   Already normalized:`, str);
       return str;
     }
 
-    // ✅ Caso 2: Es ISO con hora "YYYY-MM-DDTHH:mm:ss" → extraer fecha
+    //  Caso 2: Es ISO con hora "YYYY-MM-DDTHH:mm:ss" → extraer fecha
     if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
       const result = str.split("T")[0];
-    //  console.log(`  ✅ Extracted from ISO:`, result);
+    //  console.log(`   Extracted from ISO:`, result);
       return result;
     }
 
-    // ✅ Caso 3: Es un Date object o timestamp → convertir USANDO UTC
+    //  Caso 3: Es un Date object o timestamp → convertir USANDO UTC
     try {
       const date = new Date(value);
       if (!isNaN(date.getTime())) {
@@ -954,7 +1915,7 @@ private evaluateParameterFilter(
         const month = String(date.getUTCMonth() + 1).padStart(2, "0");
         const day = String(date.getUTCDate()).padStart(2, "0");
         const result = `${year}-${month}-${day}`;
-       // console.log(`  ✅ Converted to:`, result);
+       // console.log(`   Converted to:`, result);
         return result;
       }
     } catch (error) {
@@ -966,7 +1927,7 @@ private evaluateParameterFilter(
   }
 
 private updateTableContent(): void {
-  // ✅ AGREGAR STACK TRACE:
+  //  AGREGAR STACK TRACE:
   console.trace("📊 updateTableContent llamado desde:");
   console.log("📊 Filas a renderizar:", this.body.length);
   
@@ -1008,38 +1969,70 @@ private updateTableContent(): void {
   this.renderTableBody();
 }
 
-  private renderTableBody(): void {
-    const tbody = this.shadow.querySelector("tbody");
-    if (!tbody) {
-      this.render(); // Fallback si no existe tbody
-      return;
-    }
-
-    const headers = this.headers;
-    const body = this.body;
-
-    tbody.innerHTML =
-      body.length > 0
-        ? body
-            .map(
-              (row, rowIndex) => `
-        <tr data-index="${rowIndex}">
-          ${headers
-            .map(
-              (header, colIndex) =>
-                `<td>${this.renderCell(row, header, colIndex, rowIndex)}</td>`
-            )
-            .join("")}
-        </tr>
-      `
-            )
-            .join("")
-        : `<tr><td colspan="${headers.length}" class="no-data">${this._lang.table.noData}</td></tr>`;
-
-    this.attachActionEvents();
+ private renderTableBody(): void {
+  const tbody = this.shadow.querySelector("tbody");
+  if (!tbody) {
+    this.render();
+    return;
   }
 
+  const headers = this.headers;
+  
+  // ✅ CAMBIO CRÍTICO: Usar _pagedBody si paginación está activa
+  const body = this._config.paging?.enabled && this._config.mode === "client"
+    ? this._pagedBody
+    : this._body;
+
+  tbody.innerHTML =
+    body.length > 0
+      ? body
+          .map(
+            (row, rowIndex) => `
+      <tr data-index="${rowIndex}">
+        ${headers
+          .map(
+            (header, colIndex) =>
+              `<td>${this.renderCell(row, header, colIndex, rowIndex)}</td>`
+          )
+          .join("")}
+      </tr>
+    `
+          )
+          .join("")
+      : `<tr><td colspan="${headers.length}" class="no-data">${this._lang.table.noData}</td></tr>`;
+
+  this.attachActionEvents();
+}
+
   // Reemplaza este método en gridie.ts:
+
+
+
+  /**
+ * Re-renderiza solo el footer de paginación (más eficiente)
+ */
+private updatePaginationFooter(): void {
+  if (!this._config.paging?.enabled) return;
+  
+  const footers = this.shadow.querySelectorAll('.gridie-pagination-footer');
+  
+  footers.forEach(footer => {
+    const position = (footer as HTMLElement).dataset.position as 'top' | 'bottom';
+    const newFooterHTML = this.renderSingleFooter(position);
+    
+    // Crear un contenedor temporal
+    const temp = document.createElement('div');
+    temp.innerHTML = newFooterHTML;
+    const newFooter = temp.firstElementChild as HTMLElement;
+    
+    // Reemplazar el footer antiguo
+    footer.parentNode?.replaceChild(newFooter, footer);
+  });
+  
+  // Re-adjuntar eventos
+  this.attachPaginationEvents();
+}
+
 
   private handleOperatorChange(columnIndex: number): void {
     // Guardar scroll
@@ -1063,13 +2056,13 @@ private updateTableContent(): void {
       currentFilter?.operator ||
       this.getOperatorsForColumn(this.headers[columnIndex])[0];
 
-    // ✅ CRITICAL: Detectar si cambió entre "between" y otro operador
+    //  CRITICAL: Detectar si cambió entre "between" y otro operador
     const wasBetween = oldOperator === "between";
     const isNowBetween = newOperator === "between";
 
-    // ✅ CRITICAL: Si cambió el layout, re-renderizar INMEDIATAMENTE
+    //  CRITICAL: Si cambió el layout, re-renderizar INMEDIATAMENTE
     if (wasBetween !== isNowBetween) {
-      // ✅ FIX: Actualizar el operador en el manager con el nuevo operador
+      //  FIX: Actualizar el operador en el manager con el nuevo operador
       if (isNowBetween) {
         // Cambió A "between"
         this._filteringManager.addFilter(columnIndex, newOperator, "", "");
@@ -1108,7 +2101,7 @@ private updateTableContent(): void {
         }
       }, 0);
 
-      // ✅ FIX: Aplicar filtros después de cambiar el layout
+      //  FIX: Aplicar filtros después de cambiar el layout
       this.applyFiltersAndSorting();
 
       return; // ← Salir aquí
@@ -1259,7 +2252,7 @@ private updateTableContent(): void {
     // Si no cambió, no hacer nada
     if (oldOperator === newOperator) return;
 
-    // ✅ SIEMPRE guardar el operador seleccionado
+    //  SIEMPRE guardar el operador seleccionado
     this._selectedOperators.set(columnIndex, newOperator);
 
     const currentFilter = this._filteringManager.getColumnFilter(columnIndex);
@@ -1300,7 +2293,7 @@ private updateTableContent(): void {
       // Si no hay valor, no hacemos nada en el manager (ya guardamos en _selectedOperators)
     }
 
-    // ✅ CRÍTICO: SIEMPRE re-renderizar para actualizar el icono
+    //  CRÍTICO: SIEMPRE re-renderizar para actualizar el icono
     this.renderFilterRowOnly();
     this.attachFilterEvents();
 
@@ -1345,7 +2338,7 @@ private updateTableContent(): void {
       }
     }
 
-    // ✅ CORREGIDO: Cerrar header filter dropdown si se hace clic fuera
+    //  CORREGIDO: Cerrar header filter dropdown si se hace clic fuera
     if (this._headerFilterMenu && this._activeHeaderFilterDropdown !== null) {
       const clickedInsideMenu = this._headerFilterMenu.contains(target);
       const clickedIcon = this.shadow.querySelector(
@@ -1376,7 +2369,7 @@ private updateTableContent(): void {
       const count = this.countMatchingRows(columnIndex, param);
       options.push({
         text: param.text,
-        // ✅ CORRECCIÓN: No incluir 'text' en el value, solo los datos del filtro
+        //  CORRECCIÓN: No incluir 'text' en el value, solo los datos del filtro
         value: {
           operator: param.operator,
           value: param.value,
@@ -1539,7 +2532,7 @@ private updateTableContent(): void {
 
     const options: any[] = [];
 
-    // ✅ SOLUCIÓN: Usar getUTC* en lugar de get* para evitar problemas de zona horaria
+    //  SOLUCIÓN: Usar getUTC* en lugar de get* para evitar problemas de zona horaria
     const countRowsForYear = (year: number): number => {
       return this._originalBody.filter((row: any) => {
         const cellValue = this.getCellValueByPosition(row, columnIndex);
@@ -1777,7 +2770,7 @@ private updateTableContent(): void {
                   const hourDates = hourGroups.get(hour)!;
                   const timeFormat = config.timeFormat || "24h";
 
-                  // ✅ Buscar el valor ORIGINAL que corresponde a esta hora UTC
+                  //  Buscar el valor ORIGINAL que corresponde a esta hora UTC
                   const matchingRow = this._originalBody.find((row: any) => {
                     const cellValue = this.getCellValueByPosition(
                       row,
@@ -1798,7 +2791,7 @@ private updateTableContent(): void {
                     ? this.getCellValueByPosition(matchingRow, columnIndex)
                     : hourDates[0].toISOString();
 
-                  // ✅ CRÍTICO: Formatear el texto usando el valor original y timeFormat
+                  //  CRÍTICO: Formatear el texto usando el valor original y timeFormat
                   const dateForDisplay = new Date(valueToUse);
                   let hourText: string;
 
@@ -1840,7 +2833,7 @@ private updateTableContent(): void {
     return options;
   }
 
-  // ✅ NUEVO: Normalizar datetime completo (para filtros de hora)
+  //  NUEVO: Normalizar datetime completo (para filtros de hora)
   private normalizeDateTimeToISO(value: any): string {
     if (!value) return "";
 
@@ -1864,80 +2857,7 @@ private updateTableContent(): void {
     return "";
   }
 
-  // private applyHeaderFilters(): void {
-  //   // console.log("🔍 Applying header filters...");
-  //   // console.log(
-  //   //   "🔍 Active selections:",
-  //   //   Array.from(this._headerFilterSelections.entries())
-  //   // );
-
-  //   this.applyFiltersAndSorting();
-  //   // Filtrar _originalBody basado en selecciones
-  //   this._filteredBody = this._originalBody.filter((row: any) => {
-  //     // Por cada columna que tiene filtros activos
-  //     for (const [
-  //       colIndex,
-  //       selections,
-  //     ] of this._headerFilterSelections.entries()) {
-  //       if (selections.size === 0) continue;
-
-  //       const cellValue = this.getCellValueByPosition(row, colIndex);
-
-  //       let matchFound = false;
-  //       for (const selection of selections) {
-  //         if (typeof selection === "object" && selection.operator) {
-  //           // Es un parameter de fecha - evaluar
-  //           const date = new Date(cellValue);
-  //           if (isNaN(date.getTime())) continue;
-
-  //           switch (selection.operator) {
-  //             case "year":
-  //               if (date.getFullYear() === selection.value) matchFound = true;
-  //               break;
-  //             case "month":
-  //               if (
-  //                 date.getFullYear() === selection.year &&
-  //                 date.getMonth() === selection.value
-  //               ) {
-  //                 matchFound = true;
-  //               }
-  //               break;
-  //           }
-  //         } else {
-  //           // Es un valor simple o fecha específica
-  //           if (
-  //             cellValue === selection ||
-  //             String(cellValue) === String(selection)
-  //           ) {
-  //             matchFound = true;
-  //             break;
-  //           }
-  //         }
-  //       }
-
-  //       if (!matchFound) return false;
-  //     }
-
-  //     return true;
-  //   });
-
-  //   // console.log(
-  //   //   "✅ Filtered from",
-  //   //   this._originalBody.length,
-  //   //   "to",
-  //   //   this._filteredBody.length,
-  //   //   "rows"
-  //   // );
-
-  //   // Aplicar sorting
-  //   this._body = this._sortingManager.applySorts(
-  //     this._filteredBody,
-  //     this.headers
-  //   );
-
-  //   // Re-renderizar
-  //   this.updateTableContent();
-  // }
+  
 
 
   private applyHeaderFilters(): void {
@@ -1967,7 +2887,7 @@ private updateTableContent(): void {
       //     parentExpanded,
       // });
 
-      // ✅ FIX: Si tiene hijos Y está expandida Y el padre está expandido
+      //  FIX: Si tiene hijos Y está expandida Y el padre está expandido
       if (
         option.children &&
         option.children.length > 0 &&
@@ -2187,7 +3107,7 @@ private updateTableContent(): void {
   `;
   }
 
-  // ✅ CORRECCIÓN: Renderizar cada opción con su índice correcto
+  //  CORRECCIÓN: Renderizar cada opción con su índice correcto
   filteredOptions.forEach((option: any, optIndex: number) => {
     // Skip separators
     if (option.separator) {
@@ -2199,7 +3119,7 @@ private updateTableContent(): void {
   if (option.expandable) return false;
 
   if (option.isParameter) {
-    // ✅ CORRECCIÓN: Comparación más robusta para parameters
+    //  CORRECCIÓN: Comparación más robusta para parameters
     return Array.from(selectedValues).some((val: any) => {
       if (typeof val !== "object" || !val.operator) return false;
       
@@ -2247,7 +3167,7 @@ private updateTableContent(): void {
     </div>
   `;
     } else {
-      // ✅ CRÍTICO: Asegurar que data-option-index siempre tenga un valor válido
+      //  CRÍTICO: Asegurar que data-option-index siempre tenga un valor válido
       menuHTML += `
     <div class="header-filter-option" 
          data-option-index="${optIndex}"
@@ -2322,7 +3242,7 @@ private attachHeaderFilterMenuEvents(
   const menu = this._headerFilterMenu;
   if (!menu) return;
 
-  // ✅ CRÍTICO: Prevenir que clics dentro del menú lo cierren
+  //  CRÍTICO: Prevenir que clics dentro del menú lo cierren
   menu.addEventListener("click", (e) => {
     e.stopPropagation();
   });
@@ -2371,7 +3291,7 @@ private attachHeaderFilterMenuEvents(
     });
   }
 
-  // ✅ Evento para expand/collapse de parents (jerarquías)
+  //  Evento para expand/collapse de parents (jerarquías)
   const parentElements = menu.querySelectorAll(
     ".header-filter-option-parent"
   );
@@ -2404,7 +3324,7 @@ private attachHeaderFilterMenuEvents(
     });
   });
 
-  // ✅ CORRECCIÓN CRÍTICA: Excluir el "select-all" del selector
+  //  CORRECCIÓN CRÍTICA: Excluir el "select-all" del selector
   // Cambiado de ".header-filter-option" a ".header-filter-option:not(.header-filter-select-all)"
   const selectableElements = menu.querySelectorAll(
     ".header-filter-option:not(.header-filter-select-all)"
@@ -2444,8 +3364,8 @@ private attachHeaderFilterMenuEvents(
   });
 }
 
-  // ✅ NUEVO: Manejar expand/collapse de jerarquías
-  // ✅ NUEVO: Manejar expand/collapse de jerarquías de fechas
+  //  NUEVO: Manejar expand/collapse de jerarquías
+  //  NUEVO: Manejar expand/collapse de jerarquías de fechas
   private handleHeaderFilterExpandToggle(
     columnIndex: number,
     optionData: any
@@ -2469,7 +3389,7 @@ private attachHeaderFilterMenuEvents(
     const newState = !currentState;
 
     // console.log(
-    //   `✅ Setting ${optionData.id} from ${currentState} to ${newState}`
+    //   ` Setting ${optionData.id} from ${currentState} to ${newState}`
     // );
 
     this._headerFilterExpandedState.set(optionData.id, newState);
@@ -2500,7 +3420,7 @@ private handleHeaderFilterSelectAll(
     (opt: any) => !opt.separator && !opt.expandable
   );
 
-  // ✅ CORRECCIÓN: Verificar correctamente si todos están seleccionados
+  //  CORRECCIÓN: Verificar correctamente si todos están seleccionados
   const allSelected =
     selectableOptions.length > 0 &&
     selectableOptions.every((opt: any) => {
@@ -2581,7 +3501,6 @@ private handleHeaderFilterOptionClick(
   if (optionData.isParameter) {
     console.log("Es un parameter");
     
-    // ✅ CORRECCIÓN: Limpiar el objeto parameter antes de comparar/guardar
     const cleanParameter = {
       operator: optionData.value.operator,
       value: optionData.value.value,
@@ -2618,9 +3537,12 @@ private handleHeaderFilterOptionClick(
   console.log("Nueva selección:", Array.from(newSelection));
   this._headerFilterSelections.set(columnIndex, newSelection);
 
-  // ✅ Usar método centralizado
-  this.applyHeaderFilters();
+  //  NUEVO: Resetear a página 1 al filtrar
+  if (this._config.paging?.enabled) {
+    this._currentPage = 1;
+  }
 
+  this.applyHeaderFilters();
   this.reopenHeaderFilterMenu(columnIndex);
 }
   // Re-abrir el menú del Header Filter (mantener posición)
@@ -2631,7 +3553,7 @@ private handleHeaderFilterOptionClick(
 
     if (!icon) return;
 
-    // ✅ GUARDAR SCROLL antes de cerrar
+    //  GUARDAR SCROLL antes de cerrar
     const scrollTop = this._headerFilterMenu?.scrollTop || 0;
 
     const container = this.shadow.querySelector(
@@ -2651,7 +3573,7 @@ private handleHeaderFilterOptionClick(
     this._activeHeaderFilterDropdown = columnIndex;
     this.showHeaderFilterMenu(columnIndex, icon);
 
-    // ✅ RESTAURAR SCROLL después de re-abrir
+    //  RESTAURAR SCROLL después de re-abrir
     setTimeout(() => {
       if (this._headerFilterMenu) {
         this._headerFilterMenu.scrollTop = scrollTop;
@@ -2987,66 +3909,62 @@ private handleHeaderFilterOptionClick(
   `;
   }
 
-  private handleFilterChange(
-    columnIndex: number,
-    isSecondInput: boolean = false
-  ): void {
-    const header = this.headers[columnIndex];
+private handleFilterChange(
+  columnIndex: number,
+  isSecondInput: boolean = false
+): void {
+  const header = this.headers[columnIndex];
+  const operator = this.getCurrentOperator(columnIndex);
 
-    const operator = this.getCurrentOperator(columnIndex);
+  let input: HTMLInputElement | HTMLSelectElement | null;
 
-    let input: HTMLInputElement | HTMLSelectElement | null;
+  if (header.type === "boolean") {
+    input = this.shadow.querySelector(
+      `select.filter-select[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
+    ) as HTMLSelectElement;
+  } else {
+    input = this.shadow.querySelector(
+      `input.filter-input[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
+    ) as HTMLInputElement;
+  }
 
-    if (header.type === "boolean") {
-      input = this.shadow.querySelector(
-        `select.filter-select[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
-      ) as HTMLSelectElement;
-    } else {
-      input = this.shadow.querySelector(
-        `input.filter-input[data-column-index="${columnIndex}"][data-is-second="${isSecondInput}"]`
-      ) as HTMLInputElement;
-    }
+  if (!input) return;
+  const value = input.value;
 
-    if (!input) return;
+  if (operator === "between") {
+    const input1 = this.shadow.querySelector(
+      `input.filter-input[data-column-index="${columnIndex}"][data-is-second="false"]`
+    ) as HTMLInputElement;
+    const input2 = this.shadow.querySelector(
+      `input.filter-input[data-column-index="${columnIndex}"][data-is-second="true"]`
+    ) as HTMLInputElement;
 
-    const value = input.value;
+    if (input1 && input2) {
+      const value1 = input1.value;
+      const value2 = input2.value;
 
-    if (operator === "between") {
-      const input1 = this.shadow.querySelector(
-        `input.filter-input[data-column-index="${columnIndex}"][data-is-second="false"]`
-      ) as HTMLInputElement;
-      const input2 = this.shadow.querySelector(
-        `input.filter-input[data-column-index="${columnIndex}"][data-is-second="true"]`
-      ) as HTMLInputElement;
-
-      if (input1 && input2) {
-        const value1 = input1.value;
-        const value2 = input2.value;
-
-        if (value1 || value2) {
-          this._filteringManager.addFilter(
-            columnIndex,
-            operator,
-            value1,
-            value2
-          );
-        } else {
-          this._filteringManager.clearFilterValue(columnIndex);
-        }
-      }
-    } else {
-      if (value) {
-        this._filteringManager.addFilter(columnIndex, operator, value);
+      if (value1 || value2) {
+        this._filteringManager.addFilter(columnIndex, operator, value1, value2);
       } else {
         this._filteringManager.clearFilterValue(columnIndex);
       }
     }
-
-    this.applyFiltersAndSorting();
-
-    // Restaurar foco y posición de scroll
-    this.restoreFocusAndScroll(input);
+  } else {
+    if (value) {
+      this._filteringManager.addFilter(columnIndex, operator, value);
+    } else {
+      this._filteringManager.clearFilterValue(columnIndex);
+    }
   }
+
+  //  ✅ Resetear a página 1 al filtrar
+  if (this._config.paging?.enabled) {
+    this._currentPage = 1;
+  }
+
+  this.applyFiltersAndSorting();
+  this.restoreFocusAndScroll(input);
+}
 
   private restoreFocusAndScroll(previousInput: HTMLElement): void {
     const container = this.shadow.querySelector(
@@ -3128,19 +4046,464 @@ private handleHeaderFilterOptionClick(
 
   // ============= END FILTER ROW METHODS =============
 
-  render() {
-    const headers = this.headers;
-    const body = this.body;
-    const gridieId = this.gridieId;
+  // ============= RENDERIZADO DE PAGINACIÓN =============
 
-    this._eventHandlers.clear();
+/**
+ * Renderiza el footer de paginación completo
+ */
+private renderPaginationFooter(): string {
+  if (!this._config.paging?.enabled) return '';
+  
+  const position = this._config.paging.position || 'bottom';
+  
+  if (position === 'both') {
+    return `
+      ${this.renderSingleFooter('top')}
+      ${this.renderSingleFooter('bottom')}
+    `;
+  }
+  
+  return this.renderSingleFooter(position);
+}
 
-    this.shadow.innerHTML = `
+/**
+ * Renderiza un footer individual (top o bottom)
+ */
+private renderSingleFooter(position: 'top' | 'bottom'): string {
+  const config = this._config.paging!;
+  const jumpToPosition = config.navigation?.jumpTo?.position || 'inline';
+  
+  const footerClass = jumpToPosition === 'below' 
+    ? 'gridie-pagination-footer jumpto-below' 
+    : 'gridie-pagination-footer';
+  
+  if (jumpToPosition === 'below') {
+    return `
+      <div class="${footerClass}" data-position="${position}">
+        <div class="pagination-main">
+          ${this.renderPageSizeSelector()}
+          ${this.renderPaginationInfo()}
+          <div class="pagination-right">
+            ${this.renderNavigationButtons()}
+          </div>
+        </div>
+        ${this.renderJumpToControl()}
+      </div>
+    `;
+  }
+  
+  // Layout inline (default)
+  return `
+    <div class="${footerClass}" data-position="${position}">
+      ${this.renderPageSizeSelector()}
+      ${this.renderPaginationInfo()}
+      <div class="pagination-right">
+        ${this.renderNavigationButtons()}
+        ${this.renderJumpToControl()}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Renderiza el selector de tamaño de página
+ */
+private renderPageSizeSelector(): string {
+  const config = this._config.paging?.pageSize;
+  if (!config?.visible && config?.visible !== undefined) return '';
+  
+  const options = config?.options || [10, 25, 50, 100];
+  const currentSize = this._pageSize;
+  
+  return `
+    <div class="pagination-left">
+      <select class="pagination-pagesize" data-action="pagesize-change">
+        ${options.map(size => `
+          <option value="${size}" ${size === currentSize ? 'selected' : ''}>
+            ${size}
+          </option>
+        `).join('')}
+      </select>
+    </div>
+  `;
+}
+
+/**
+ * Renderiza la información de registros (Mostrando X-Y de Z)
+ */
+/**
+ * Renderiza la información de registros (Mostrando X-Y de Z)
+ */
+private renderPaginationInfo(): string {
+  // ✅ PROTECCIÓN: Si no hay config de paging o lang, retornar vacío
+  if (!this._config.paging?.showInfo) return '';
+  
+  // ✅ PROTECCIÓN: Si no hay idioma configurado, usar valores por defecto
+  if (!this._lang || !this._lang.paging) {
+    console.warn("⚠️ Idioma de paginación no configurado, usando valores por defecto");
+    
+    if (this._totalItems === 0) {
+      return `
+        <div class="pagination-center">
+          <span class="pagination-info">Mostrando 0 items</span>
+        </div>
+      `;
+    }
+    
+    const start = (this._currentPage - 1) * this._pageSize + 1;
+    const end = Math.min(this._currentPage * this._pageSize, this._totalItems);
+    const total = this._totalItems;
+    
+    return `
+      <div class="pagination-center">
+        <span class="pagination-info">
+          Mostrando ${start}-${end} de ${total.toLocaleString()} items
+        </span>
+      </div>
+    `;
+  }
+  
+  // ✅ CÓDIGO ORIGINAL (cuando el idioma está bien configurado)
+  if (this._totalItems === 0) {
+    return `
+      <div class="pagination-center">
+        <span class="pagination-info">
+          ${this._lang.paging.showing} 0 ${this._lang.paging.items}
+        </span>
+      </div>
+    `;
+  }
+  
+  const start = (this._currentPage - 1) * this._pageSize + 1;
+  const end = Math.min(this._currentPage * this._pageSize, this._totalItems);
+  const total = this._totalItems;
+  
+  return `
+    <div class="pagination-center">
+      <span class="pagination-info">
+        ${this._lang.paging.showing} ${start}-${end} ${this._lang.paging.of} ${total.toLocaleString()} ${this._lang.paging.items}
+      </span>
+    </div>
+  `;
+}
+
+/**
+ * Renderiza los botones de navegación
+ */
+private renderNavigationButtons(): string {
+  const config = this._config.paging?.navigation;
+  if (config?.visible === false) return '';
+  
+  const showFirstLast = config?.showFirstLast ?? true;
+  const showPrevNext = config?.showPrevNext ?? true;
+  
+  const firstDisabled = this._currentPage === 1 ? 'disabled' : '';
+  const lastDisabled = this._currentPage === this._totalPages ? 'disabled' : '';
+  
+  const pageButtons = this.calculatePageButtons();
+  
+  // ✅ PROTECCIÓN: Valores por defecto si no hay idioma
+  const labels = {
+    first: this._lang?.paging?.first || 'Primera',
+    previous: this._lang?.paging?.previous || 'Anterior',
+    next: this._lang?.paging?.next || 'Siguiente',
+    last: this._lang?.paging?.last || 'Última',
+  };
+  
+  return `
+    <div class="pagination-navigation">
+      ${showFirstLast ? `
+        <button 
+          class="pagination-btn pagination-first" 
+          data-action="first-page"
+          ${firstDisabled}
+          title="${labels.first}"
+        >
+          &lt;&lt;
+        </button>
+      ` : ''}
+      
+      ${showPrevNext ? `
+        <button 
+          class="pagination-btn pagination-prev" 
+          data-action="prev-page"
+          ${firstDisabled}
+          title="${labels.previous}"
+        >
+          &lt;
+        </button>
+      ` : ''}
+      
+      ${this.renderPageButtons(pageButtons)}
+      
+      ${showPrevNext ? `
+        <button 
+          class="pagination-btn pagination-next" 
+          data-action="next-page"
+          ${lastDisabled}
+          title="${labels.next}"
+        >
+          &gt;
+        </button>
+      ` : ''}
+      
+      ${showFirstLast ? `
+        <button 
+          class="pagination-btn pagination-last" 
+          data-action="last-page"
+          ${lastDisabled}
+          title="${labels.last}"
+        >
+          &gt;&gt;
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+/**
+ * Renderiza los botones numéricos de página
+ */
+private renderPageButtons(buttons: (number | "ellipsis")[]): string {
+  return buttons.map(btn => {
+    if (btn === "ellipsis") {
+      return `<span class="pagination-ellipsis">...</span>`;
+    }
+    
+    const isActive = btn === this._currentPage;
+    const activeClass = isActive ? 'active' : '';
+    
+    return `
+      <button 
+        class="pagination-btn pagination-page ${activeClass}" 
+        data-action="goto-page"
+        data-page="${btn}"
+        ${isActive ? 'aria-current="page"' : ''}
+      >
+        ${btn}
+      </button>
+    `;
+  }).join('');
+}
+
+/**
+ * Renderiza el control "Ir a página"
+ */
+private renderJumpToControl(): string {
+  const config = this._config.paging?.navigation?.jumpTo;
+  if (!config?.visible) return '';
+  
+  const buttonText = config.buttonText || '→';
+  
+  // ✅ PROTECCIÓN: Valores por defecto si no hay idioma
+  const jumpToLabel = this._lang?.paging?.jumpTo || 'Ir a';
+  const pageLabel = this._lang?.paging?.page || 'Página';
+  
+  return `
+    <div class="pagination-jumpto">
+      <span class="jumpto-label">${jumpToLabel}:</span>
+      <input 
+        type="number" 
+        class="jumpto-input" 
+        data-action="jumpto-input"
+        min="1" 
+        max="${this._totalPages}" 
+        placeholder="${pageLabel}"
+        aria-label="${jumpToLabel} ${pageLabel}"
+      />
+      <button 
+        class="jumpto-btn" 
+        data-action="jumpto-btn"
+        title="${jumpToLabel}"
+      >
+        ${buttonText}
+      </button>
+    </div>
+  `;
+}
+
+/**
+ * Adjunta eventos a los controles del footer de paginación
+ */
+/**
+ * Adjunta eventos a los controles del footer de paginación
+ */
+private attachPaginationEvents(): void {
+  if (!this._config.paging?.enabled) return;
+  
+  const footers = this.shadow.querySelectorAll('.gridie-pagination-footer');
+  
+  footers.forEach(footer => {
+    // PageSize selector
+    const pageSizeSelect = footer.querySelector('[data-action="pagesize-change"]');
+    if (pageSizeSelect) {
+      pageSizeSelect.addEventListener('change', (e) => {
+        const newSize = parseInt((e.target as HTMLSelectElement).value);
+        this.setPageSize(newSize);
+      });
+    }
+    
+    // First page button
+    const firstBtn = footer.querySelector('[data-action="first-page"]');
+    if (firstBtn) {
+      firstBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.firstPage();
+      });
+    }
+    
+    // Previous page button
+    const prevBtn = footer.querySelector('[data-action="prev-page"]');
+    if (prevBtn) {
+      prevBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.previousPage();
+      });
+    }
+    
+    // Next page button
+    const nextBtn = footer.querySelector('[data-action="next-page"]');
+    if (nextBtn) {
+      nextBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.nextPage();
+      });
+    }
+    
+    // Last page button
+    const lastBtn = footer.querySelector('[data-action="last-page"]');
+    if (lastBtn) {
+      lastBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.lastPage();
+      });
+    }
+    
+    // Page number buttons
+    footer.querySelectorAll('[data-action="goto-page"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const page = parseInt((btn as HTMLElement).dataset.page!);
+        this.goToPage(page);
+      });
+    });
+    
+    //  Jump to input (Enter key) - CORREGIDO
+  //  SOLUCIÓN 1: Type Assertion (Recomendada)
+const jumpToInput = footer.querySelector('[data-action="jumpto-input"]');
+if (jumpToInput) {
+  jumpToInput.addEventListener('keypress', ((e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      this.handleJumpTo(footer);
+    }
+  }) as EventListener); // ← Type assertion
+}
+    
+    // Jump to button
+    const jumpToBtn = footer.querySelector('[data-action="jumpto-btn"]');
+    if (jumpToBtn) {
+      jumpToBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.handleJumpTo(footer);
+      });
+    }
+  });
+}
+
+/**
+ * Maneja el salto a página específica
+ */
+private handleJumpTo(footer: Element): void {
+  const input = footer.querySelector('[data-action="jumpto-input"]') as HTMLInputElement;
+  if (!input) return;
+  
+  const page = parseInt(input.value);
+  
+  if (isNaN(page) || page < 1 || page > this._totalPages) {
+    // Mostrar error visual
+    input.style.borderColor = '#e74c3c';
+    input.style.boxShadow = '0 0 0 3px rgba(231, 76, 60, 0.1)';
+    
+    setTimeout(() => {
+      input.style.borderColor = '';
+      input.style.boxShadow = '';
+    }, 1000);
+    
+    console.warn(`Página ${page} inválida. Rango: 1-${this._totalPages}`);
+    return;
+  }
+  
+  this.goToPage(page);
+  input.value = ''; // Limpiar input
+}
+
+ render() {
+
+   if (this._hasError) {
+    this.renderErrorState();
+    return;
+  }
+
+  
+  const headers = this.headers;
+  const body = this._config.paging?.enabled && this._config.mode === "client"
+    ? this._pagedBody
+    : this._body;
+  const gridieId = this.gridieId;
+
+  this._eventHandlers.clear();
+
+  this.shadow.innerHTML = `
     <style>
       ${gridieStyles}
       ${filterRowStyles}
-      
+      ${paginationStyles}
 
+      /* ✅ NUEVO: Estilos para scroll independiente */
+      .gridie-table-wrapper {
+        overflow-x: auto;
+        overflow-y: visible;
+        width: 100%;
+        margin-bottom: 0;
+      }
+
+      /* La tabla ahora está dentro del wrapper con scroll */
+      .gridie-table-wrapper .gridie-table {
+        margin-bottom: 0;
+      }
+
+      /* El footer queda fuera del scroll */
+      .gridie-pagination-footer[data-position="bottom"] {
+        margin-top: 0;
+        border-top: 1px solid #ddd;
+        background: white;
+      }
+
+      .gridie-pagination-footer[data-position="top"] {
+        margin-bottom: 0;
+        border-bottom: 1px solid #ddd;
+        background: white;
+      }
+
+      /* Opcional: Sombra para indicar que hay scroll */
+      .gridie-table-wrapper::-webkit-scrollbar {
+        height: 8px;
+      }
+
+      .gridie-table-wrapper::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+      }
+
+      .gridie-table-wrapper::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+      }
+
+      .gridie-table-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
 
       .gridie-context-menu {
         position: absolute;
@@ -3169,7 +4532,6 @@ private handleHeaderFilterOptionClick(
           width: 16px;
           height: 16px;
       }
-     
 
       .context-menu-item:hover {
         background: #f0f0f0;
@@ -3180,9 +4542,6 @@ private handleHeaderFilterOptionClick(
         background: #e0e0e0;
         margin: 4px 0;
       }
-
-
-
 
       /* Estilos para dropdown de operadores */
       .filter-operator-menu {
@@ -3240,7 +4599,7 @@ private handleHeaderFilterOptionClick(
         flex: 1;
       }
 
-      /* ✅ ESTILOS COMPLETOS DEL HEADER FILTER */
+      /*  ESTILOS COMPLETOS DEL HEADER FILTER */
       .header-filter-menu {
         position: absolute;
         background: white;
@@ -3306,7 +4665,7 @@ private handleHeaderFilterOptionClick(
         text-overflow: ellipsis;
       }
 
-      /* ✅ Estilos para opciones parent (expandibles) */
+      /*  Estilos para opciones parent (expandibles) */
       .header-filter-option-parent {
         padding: 6px 12px;
         cursor: pointer;
@@ -3383,95 +4742,108 @@ private handleHeaderFilterOptionClick(
       }
 
       .content-th {
-    display: flex;
-}
+        display: flex;
+      }
 
+      .th-content {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        gap: 6px;
+      }
 
-
-.th-content {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  gap: 6px;
-}
-
-/* Para evitar saltos cuando no hay icono */
-.th-filter-icon,
-.th-sort-indicator {
-  display: flex;
-  align-items: center;
-}
+      /* Para evitar saltos cuando no hay icono */
+      .th-filter-icon,
+      .th-sort-indicator {
+        display: flex;
+        align-items: center;
+      }
     </style>
 
     <div class="gridie-container" data-gridie-id="${gridieId}">
       ${gridieId ? `<div class="gridie-id">ID: ${gridieId}</div>` : ""}
-      <table class="gridie-table">
-        <thead>
-          <tr>
-            ${headers
-              .map(
-                (header, index) => `
-             <th 
-  class="${header.sortable ? "sortable" : ""}" 
-  data-column-index="${index}"
->
-  <div class="th-content">
+      
+      ${this._config.paging?.position === 'top' || this._config.paging?.position === 'both' 
+        ? this.renderPaginationFooter() 
+        : ''}
+      
+      <!-- ✅ NUEVO: Wrapper con scroll solo para la tabla -->
+      <div class="gridie-table-wrapper">
+        <table class="gridie-table">
+          <thead>
+            <tr>
+              ${headers
+                .map(
+                  (header, index) => `
+               <th 
+    class="${header.sortable ? "sortable" : ""}" 
+    data-column-index="${index}"
+  >
+    <div class="th-content">
 
-    <div class="th-filter-icon">
-      ${this.renderHeaderFilterIcon(index, header)}
+      <div class="th-filter-icon">
+        ${this.renderHeaderFilterIcon(index, header)}
+      </div>
+
+      <div class="th-label">
+        ${header.label}
+      </div>
+
+      <div class="th-sort-indicator">
+        ${this.getSortIndicator(index)}
+      </div>
+
     </div>
+  </th>
 
-    <div class="th-label">
-      ${header.label}
-    </div>
-
-    <div class="th-sort-indicator">
-      ${this.getSortIndicator(index)}
-    </div>
-
-  </div>
-</th>
-
-            `
-              )
-              .join("")}
-          </tr>
-          ${this.renderFilterRow()}
-        </thead>
-        <tbody>
-          ${
-            body.length > 0
-              ? body
-                  .map(
-                    (row, rowIndex) => `
-                <tr data-index="${rowIndex}">
-                  ${headers
-                    .map(
-                      (header, colIndex) =>
-                        `<td>${this.renderCell(
-                          row,
-                          header,
-                          colIndex,
-                          rowIndex
-                        )}</td>`
-                    )
-                    .join("")}
-                </tr>
               `
-                  )
-                  .join("")
-              : `<tr><td colspan="${headers.length}" class="no-data">${this._lang.table.noData}</td></tr>`
-          }
-        </tbody>
-      </table>
+                )
+                .join("")}
+            </tr>
+            ${this.renderFilterRow()}
+          </thead>
+          <tbody>
+            ${
+              body.length > 0
+                ? body
+                    .map(
+                      (row, rowIndex) => `
+                  <tr data-index="${rowIndex}">
+                    ${headers
+                      .map(
+                        (header, colIndex) =>
+                          `<td>${this.renderCell(
+                            row,
+                            header,
+                            colIndex,
+                            rowIndex
+                          )}</td>`
+                      )
+                      .join("")}
+                  </tr>
+                `
+                    )
+                    .join("")
+                : `<tr><td colspan="${headers.length}" class="no-data">${this._lang.table.noData}</td></tr>`
+            }
+          </tbody>
+        </table>
+      </div>
+      <!-- ✅ FIN del wrapper -->
+      
+      ${this._config.paging?.position === 'bottom' || this._config.paging?.position === 'both' 
+        ? this.renderPaginationFooter() 
+        : ''}
     </div>
   `;
 
-    this.attachActionEvents();
-    this.attachHeaderEvents();
-    this.attachFilterEvents();
-    this.attachHeaderFilterEvents();
-  }
+  this.attachActionEvents();
+  this.attachHeaderEvents();
+  this.attachFilterEvents();
+  this.attachHeaderFilterEvents();
+  this.attachPaginationEvents();
+}
+
 
   // Renderizar icono del Header Filter
   private renderHeaderFilterIcon(
@@ -3480,7 +4852,7 @@ private handleHeaderFilterOptionClick(
   ): string {
     if (!header.filters?.headerFilter?.visible) return "";
 
-    // ✅ Verificar si hay filtros activos en esta columna
+    //  Verificar si hay filtros activos en esta columna
     const hasActiveFilter =
       this._headerFilterSelections.has(columnIndex) &&
       this._headerFilterSelections.get(columnIndex)!.size > 0;
@@ -3544,7 +4916,7 @@ private handleHeaderFilterOptionClick(
 
     if (!icon) return;
 
-    // ✅ Llamar a showHeaderFilterMenu solo con columnIndex e icon
+    //  Llamar a showHeaderFilterMenu solo con columnIndex e icon
     this.showHeaderFilterMenu(columnIndex, icon);
   }
 

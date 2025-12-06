@@ -1,4 +1,10 @@
-// src/gridie/styles/index.ts
+// import gridieStylesRaw from "./gridie.css?raw";
+// import filterRowStylesRaw from "./filterRow.css?raw";
+import paginationStylesRaw from "./pagination.css?raw"; //  NUEVO
+
+// export const gridieStyles = gridieStylesRaw;
+// export const filterRowStyles = filterRowStylesRaw;
+export const paginationStyles = paginationStylesRaw; //  NUEVO
 
 export const gridieStyles = `
 .gridie-container {
@@ -49,14 +55,14 @@ export const gridieStyles = `
   white-space: nowrap;
 }
 
-/* ✅ NUEVO: Header Filter Icon */
+/*  NUEVO: Header Filter Icon */
 .header-filter-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
-  margin-right: 8px; /* ✅ Cambio: de margin-left a margin-right */
+  margin-right: 8px; /*  Cambio: de margin-left a margin-right */
   cursor: pointer;
   color: #999;
   transition: color 0.2s;
@@ -105,6 +111,49 @@ export const gridieStyles = `
   background: #f5f5f5;
   border-radius: 4px;
   display: inline-block;
+}
+
+
+/* ========== LOADING OVERLAY ========== */
+.gridie-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.gridie-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.gridie-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: gridie-spin 1s linear infinite;
+}
+
+@keyframes gridie-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.gridie-loading-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
 }
 `;
 
@@ -168,7 +217,7 @@ export const filterRowStyles = `
   width: 100%;
 }
 
-/* ✅ IMPORTANTE: position relative para que el dropdown se posicione correctamente */
+/*  IMPORTANTE: position relative para que el dropdown se posicione correctamente */
 .filter-operator-dropdown {
   position: relative;
   flex-shrink: 0;

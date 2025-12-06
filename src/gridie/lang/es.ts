@@ -1,6 +1,9 @@
+import type { FilterOperator } from "../filteringFunctions";
+
 export const es = {
   table: {
     noData: "No hay datos disponibles",
+    loading: "Cargando datos...", 
   },
   sorting: {
     sortAscending: "Ordenar Ascendente",
@@ -23,7 +26,7 @@ export const es = {
       '<=': "Menor o igual",
       '>=': "Mayor o igual",
       between: "Entre",
-    },
+    } as Record<FilterOperator, string>, // ← Agregar este tipo
     placeholders: {
       string: "Escriba para filtrar...",
       number: "Ingrese un número...",
@@ -36,7 +39,6 @@ export const es = {
       true: "Sí",
       false: "No",
     },
-    // ✅ NUEVO: Header Filter
     headerFilter: {
       selectAll: "Seleccionar todos",
       search: "Buscar...",
@@ -55,7 +57,20 @@ export const es = {
         9: "Octubre",
         10: "Noviembre",
         11: "Diciembre",
-      },
+      } as Record<number, string>, 
     },
   },
+  paging: {
+    showing: "Mostrando",
+    of: "de",
+    items: "items",
+    page: "Página",
+    jumpTo: "Ir a",
+    first: "Primera",
+    previous: "Anterior",
+    next: "Siguiente",
+    last: "Última",
+  },
 };
+
+export type LanguageES = typeof es;

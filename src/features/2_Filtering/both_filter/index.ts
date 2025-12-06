@@ -26,9 +26,9 @@ export function render(container: HTMLElement): void {
             </ul>
 
             <div style="margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #4caf50;">
-              <h5 style="margin-top: 0;">✅ Casos de Uso Implementados:</h5>
+              <h5 style="margin-top: 0;"> Casos de Uso Implementados:</h5>
               <div style="font-size: 0.9em; line-height: 1.8;">
-                <p><strong>📝 Nombre:</strong> Header Filter (valores únicos + búsqueda) + Filter Row (contiene, igual, empieza con)</p>
+                <p><strong> Nombre:</strong> Header Filter (valores únicos + búsqueda) + Filter Row (contiene, igual, empieza con)</p>
                 <p><strong>🏢 Departamento:</strong> Header Filter (parameters con grupos) + Filter Row (igual, no igual, contiene)</p>
                 <p><strong>💰 Salario:</strong> Header Filter (rangos: Junior/Mid/Senior) + Filter Row (operadores numéricos con between)</p>
                 <p><strong>🌍 Ciudad:</strong> Header Filter (values desde BD) + Filter Row (operadores de string)</p>
@@ -94,7 +94,7 @@ export function render(container: HTMLElement): void {
   }
 }</code></pre>
               <p style="margin: 10px 0 0 0; color: #555; font-size: 0.9em;">
-                ⚠️ <strong>Importante:</strong> Ambos filtros deben cumplirse (AND). Si el Header Filter selecciona "Senior" y el Filter Row pone "&lt; 50000", no habrá resultados.
+                <strong>Importante:</strong> Ambos filtros deben cumplirse (AND). Si el Header Filter selecciona "Senior" y el Filter Row pone "&lt; 50000", no habrá resultados.
               </p>
             </div>
 
@@ -125,6 +125,7 @@ export function render(container: HTMLElement): void {
         label: "ID",
         type: "number" as const,
         sortable: true,
+        
       },
       {
         label: "Nombre",
@@ -151,12 +152,12 @@ export function render(container: HTMLElement): void {
             visible: true,
             parameters: [
               {
-                text: "🖥️ Departamentos Técnicos",
+                text: "Departamentos Técnicos",
                 operator: "in" as const,
                 value: ["IT", "Desarrollo", "QA"],
               },
               {
-                text: "💼 Departamentos de Negocio",
+                text: "Departamentos de Negocio",
                 operator: "in" as const,
                 value: ["Ventas", "Marketing", "RRHH"],
               },
@@ -362,7 +363,7 @@ export function render(container: HTMLElement): void {
    • Escribe "60000" en el input
    • Presiona Enter o haz clic fuera
 
-✅ RESULTADO:
+ RESULTADO:
    Verás solo empleados que sean del departamento IT
    Y que además tengan salario mayor a $60,000
 

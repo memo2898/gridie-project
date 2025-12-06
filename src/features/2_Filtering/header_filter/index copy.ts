@@ -271,7 +271,7 @@ export function render(container: HTMLElement): void {
         },
       },
 
-      // ✅ CASO 8: Fecha con jerarquía solo año
+      //  CASO 8: Fecha con jerarquía solo año
       {
         label: "Fecha Ingreso",
         type: "date" as const,
@@ -284,7 +284,7 @@ export function render(container: HTMLElement): void {
         },
       },
 
-      // ✅ CASO 9: Fecha con jerarquía año → mes
+      //  CASO 9: Fecha con jerarquía año → mes
       {
         label: "Fecha Nacimiento",
         type: "date" as const,
@@ -296,7 +296,7 @@ export function render(container: HTMLElement): void {
         },
       },
 
-      // ✅ CASO 10: Fecha con jerarquía año → mes → día
+      //  CASO 10: Fecha con jerarquía año → mes → día
       {
         label: "Última Conexión",
         type: "date" as const,
@@ -308,7 +308,7 @@ export function render(container: HTMLElement): void {
         },
       },
 
-      // ✅ CASO 11: Fecha con parameters + jerarquía
+      //  CASO 11: Fecha con parameters + jerarquía
       {
         label: "Fecha Proyecto",
         type: "date" as const,
@@ -339,7 +339,7 @@ export function render(container: HTMLElement): void {
         },
       },
 
-      // ✅ CASO 12: DateTime con formato 12h
+      //  CASO 12: DateTime con formato 12h
       {
         label: "Hora Registro (12h)",
         type: "date" as const,
@@ -352,7 +352,7 @@ export function render(container: HTMLElement): void {
         },
       },
 
-      // ✅ CASO 13: DateTime con formato 24h
+      //  CASO 13: DateTime con formato 24h
       {
         label: "Hora Salida (24h)",
         type: "date" as const,

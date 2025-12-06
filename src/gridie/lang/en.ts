@@ -1,6 +1,9 @@
+import type { FilterOperator } from "../filteringFunctions";
+
 export const en = {
   table: {
     noData: "No data available",
+    loading: "Loading data...", 
   },
   sorting: {
     sortAscending: "Sort Ascending",
@@ -23,7 +26,7 @@ export const en = {
       '<=': "Less than or equal",
       '>=': "Greater than or equal",
       between: "Between",
-    },
+    } as Record<FilterOperator, string>, // ← Agregar este tipo
     placeholders: {
       string: "Type to filter...",
       number: "Enter a number...",
@@ -36,7 +39,6 @@ export const en = {
       true: "Yes",
       false: "No",
     },
-    // ✅ NUEVO: Header Filter
     headerFilter: {
       selectAll: "Select all",
       search: "Search...",
@@ -55,7 +57,20 @@ export const en = {
         9: "October",
         10: "November",
         11: "December",
-      },
+      } as Record<number, string>, 
     },
   },
+  paging: {
+    showing: "Showing",
+    of: "of",
+    items: "items",
+    page: "Page",
+    jumpTo: "Go to",
+    first: "First",
+    previous: "Previous",
+    next: "Next",
+    last: "Last",
+  },
 };
+
+export type LanguageEN = typeof en;
