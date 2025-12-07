@@ -1437,15 +1437,10 @@ private showContextMenu(x: number, y: number, columnIndex: number): void {
   const menu = document.createElement("div");
   menu.className = "gridie-context-menu";
 
-  // ✅ CAMBIO: position: absolute (se mueve con scroll vertical)
-  // Convertir coordenadas del viewport a coordenadas del container
-  const containerRect = container.getBoundingClientRect();
-  const adjustedX = x - containerRect.left + container.scrollLeft;
-  const adjustedY = y - containerRect.top + container.scrollTop;
-
+  // ✅ SOLUCIÓN: position: fixed con coordenadas del viewport
   menu.style.position = "fixed";
-  menu.style.left = `${adjustedX}px`;
-  menu.style.top = `${adjustedY}px`;
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
   menu.style.zIndex = "10000";
 
   const hasMultipleSorts = this._sortingManager.getAllSorts().length > 1;
@@ -1492,26 +1487,27 @@ private showContextMenu(x: number, y: number, columnIndex: number): void {
     }
   });
 
-  // ✅ Agregar al Shadow DOM
+  // ✅ Agregar al Shadow DOM (no a document.body)
   container.appendChild(menu);
   this._contextMenu = menu;
 
   // ✅ Ajustar si se sale del viewport
   requestAnimationFrame(() => {
     const menuRect = menu.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
-    let finalX = adjustedX;
-    let finalY = adjustedY;
+    let finalX = x;
+    let finalY = y;
 
-    // Si se sale por la derecha del container
-    if (menuRect.right > containerRect.right) {
-      finalX = adjustedX - menuRect.width;
+    // Si se sale por la derecha
+    if (menuRect.right > viewportWidth - 10) {
+      finalX = x - menuRect.width;
     }
 
-    // Si se sale por abajo del container
-    if (menuRect.bottom > containerRect.bottom) {
-      finalY = adjustedY - menuRect.height;
+    // Si se sale por abajo
+    if (menuRect.bottom > viewportHeight - 10) {
+      finalY = y - menuRect.height;
     }
 
     // Si se sale por la izquierda
