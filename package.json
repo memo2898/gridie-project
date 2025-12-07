@@ -1,30 +1,66 @@
 {
-  "name": "gridie-project",
-  "private": true,
-  "version": "0.0.0",
+  "name": "gridie",
+  "version": "1.0.0",
+  "description": "Advanced data table component with filtering, sorting, and pagination built with Web Components",
   "type": "module",
-  "main": "./dist/my-element.umd.js",
-  "module": "./dist/my-element.es.js",
+  "main": "./dist/gridie.umd.js",
+  "module": "./dist/gridie.es.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/my-element.es.js",
-      "require": "./dist/my-element.umd.js"
-    }
+      "types": "./dist/index.d.ts",
+      "import": "./dist/gridie.es.js",
+      "require": "./dist/gridie.umd.js"
+      
+    },
+    "./dist/gridie.css": "./dist/gridie.css"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build": "vite build && tsc --project tsconfig.build.json",
+    "preview": "vite preview",
+    "prepublishOnly": "npm run build",
+    "type-check": "tsc --noEmit"
   },
+  "keywords": [
+    "table",
+    "datagrid",
+    "datatable",
+    "grid",
+    "pagination",
+    "filtering",
+    "sorting",
+    "web-components",
+    "typescript",
+    "component",
+    "data-table",
+    "filter",
+    "sort",
+    "responsive"
+  ],
+  "author": { 
+    "name": "Manuel",
+    "email": "tu-email@ejemplo.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tu-usuario/gridie.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tu-usuario/gridie/issues"
+  },
+  "homepage": "https://github.com/tu-usuario/gridie#readme",
   "devDependencies": {
-    "@types/prismjs": "^1.26.5",
-    "@types/react": "^19.2.7",
-    "typescript": "~5.9.3",
-    "vite": "^7.2.4"
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
   },
-  "dependencies": {
-    "highlight.js": "^11.11.1",
-    "prismjs": "^1.30.0",
-    "vscode-icons-js": "^11.6.1"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

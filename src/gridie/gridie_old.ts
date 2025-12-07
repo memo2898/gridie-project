@@ -1,4 +1,4 @@
-// src/gridie/gridie.ts nuevo
+// src/gridie/gridie.ts
 //Ultimos cambios de gridie donde faltan ajustar
 import { SortingManager } from "./sortingFunctions";
 import type { SortDirection } from "./sortingFunctions";
@@ -154,7 +154,6 @@ private _lang: LanguageStrings = getLanguage("es");
 
   private _identityField?: string;
   private _identityMap: Map<any, any> = new Map();
-  private _lastScrollLeft: number = 0;
 
 constructor(config?: GridieConfig) {
   super();
@@ -270,7 +269,7 @@ public setHeaders(headers: (string | GridieHeaderConfig)[]): void {
   
   this.render();
   
- // console.log(`📊 Headers actualizados: ${headers.length} columnas`);
+  console.log(`📊 Headers actualizados: ${headers.length} columnas`);
 }
 
 
@@ -281,7 +280,7 @@ public setHeaders(headers: (string | GridieHeaderConfig)[]): void {
  */
 public refresh(): void {
   this.render();
-  //console.log("🔄 Tabla refrescada");
+  console.log("🔄 Tabla refrescada");
 }
 
 /**
@@ -291,7 +290,7 @@ public refresh(): void {
  */
 public reapply(): void {
   this.applyFiltersAndSorting();
- // console.log("🔄 Filtros y sorting re-aplicados");
+  console.log("🔄 Filtros y sorting re-aplicados");
 }
   /**
  * Valida la configuración antes de inicializar
@@ -353,7 +352,7 @@ public clearAllFilters(): void {
   // Re-aplicar (sin filtros)
   this.applyFiltersAndSorting();
   
-  //console.log("🗑️ Todos los filtros limpiados");
+  console.log("🗑️ Todos los filtros limpiados");
 }
 
 
@@ -502,7 +501,7 @@ private buildIdentityMap(): void {
     this._identityMap.set(identityValue, row);
   });
   
-  //console.log(`🗂️ Identity map construido: ${this._identityMap.size} registros únicos (campo: "${this._identityField}")`);
+  console.log(`🗂️ Identity map construido: ${this._identityMap.size} registros únicos (campo: "${this._identityField}")`);
 }
 
 
@@ -587,7 +586,7 @@ public updateRowByIdentity(value: any, data: Partial<any>): boolean {
   // Re-aplicar filtros y sorting
   this.applyFiltersAndSorting();
   
-  //console.log(`✅ Gridie.updateRowByIdentity: Fila actualizada (${this._identityField} = "${value}")`);
+  console.log(`✅ Gridie.updateRowByIdentity: Fila actualizada (${this._identityField} = "${value}")`);
   return true;
 }
 
@@ -615,7 +614,7 @@ public removeRowByIdentity(value: any): boolean {
   const index = this._originalBody.indexOf(row);
   
   if (index === -1) {
-    console.error(' Gridie.removeRowByIdentity: Inconsistencia interna - fila en map pero no en body');
+    console.error('❌ Gridie.removeRowByIdentity: Inconsistencia interna - fila en map pero no en body');
     return false;
   }
   
@@ -628,108 +627,33 @@ public removeRowByIdentity(value: any): boolean {
   // Re-aplicar filtros y sorting
   this.applyFiltersAndSorting();
   
-  //console.log(`🗑️ Gridie.removeRowByIdentity: Fila eliminada (${this._identityField} = "${value}")`);
+  console.log(`🗑️ Gridie.removeRowByIdentity: Fila eliminada (${this._identityField} = "${value}")`);
   return true;
 }
 
 
-
-connectedCallback() {
-  this.render();
-  document.addEventListener("click", this.handleDocumentClick.bind(this));
-  
-  // Esperar a que el DOM esté completamente renderizado
-  setTimeout(() => {
-    // Buscar TODOS los elementos posibles con scroll
-    const container = this.shadow.querySelector('.gridie-container') as HTMLElement;
-    const wrapper = this.shadow.querySelector('.gridie-table-wrapper') as HTMLElement;
-    const table = this.shadow.querySelector('.gridie-table') as HTMLElement;
-    
-    // Encontrar el que REALMENTE tiene scroll horizontal
-    const scrollElement = [wrapper, container, table].find(el => 
-      el && el.scrollWidth > el.clientWidth
-    );
-    
-    if (!scrollElement) {
-      console.warn('⚠️ No se encontró elemento con scroll horizontal');
-      return;
-    }
-    
-    //console.log('🎯 Elemento con scroll encontrado:', scrollElement.className || scrollElement.tagName);
-    //console.log('   scrollWidth:', scrollElement.scrollWidth);
-    //console.log('   clientWidth:', scrollElement.clientWidth);
-    
-    // Inicializar tracking
-    this._lastScrollLeft = scrollElement.scrollLeft;
-    
-    const handleScroll = () => {
-      const currentScrollLeft = scrollElement.scrollLeft;
-      
-      // console.log('📊 Scroll event:', {
-      //   elemento: scrollElement.className || scrollElement.tagName,
-      //   ultimo: this._lastScrollLeft,
-      //   actual: currentScrollLeft,
-      //   cambio: Math.abs(currentScrollLeft - this._lastScrollLeft)
-      // });
-      
-      // Detectar cambio en scroll horizontal
-      if (Math.abs(this._lastScrollLeft - currentScrollLeft) > 0) {
-       // console.log('🔄 CERRANDO MENÚS - Scroll horizontal detectado');
-        
-        this.hideContextMenu();
-        this.closeHeaderFilterDropdown();
-        this.closeOperatorDropdown();
-      }
-      
-      // Actualizar posición
-      this._lastScrollLeft = currentScrollLeft;
-    };
-    
-    scrollElement.addEventListener('scroll', handleScroll);
-    
-    // Guardar referencias para cleanup
-    (this as any)._scrollHandler = handleScroll;
-    (this as any)._scrollElement = scrollElement;
-    
-    //console.log('✅ Listener de scroll adjuntado correctamente');
-  }, 100); // ← Pequeño delay para asegurar que el DOM esté listo
-}
-
-// disconnectedCallback() {
-//   document.removeEventListener("click", this.handleDocumentClick.bind(this));
-  
-//   // ✅ Remover listener de scroll
-//   const container = this.shadow.querySelector('.gridie-container') as HTMLElement;
-//   if (container && (this as any)._scrollHandler) {
-//     container.removeEventListener('scroll', (this as any)._scrollHandler);
-//     delete (this as any)._scrollHandler;
-//   }
-  
-//   // Limpiar menús
-//   this.hideContextMenu();
-//   this.closeOperatorDropdown();
-//   this.closeHeaderFilterDropdown();
-// }
+  connectedCallback() {
+    this.render();
+    document.addEventListener("click", this.handleDocumentClick.bind(this));
+  }
 
 disconnectedCallback() {
   document.removeEventListener("click", this.handleDocumentClick.bind(this));
   
-  // ✅ Remover listener de scroll
-  const container = this.shadow.querySelector('.gridie-container') as HTMLElement;
-  if (container && (this as any)._scrollHandler) {
-    container.removeEventListener('scroll', (this as any)._scrollHandler);
-    delete (this as any)._scrollHandler;
-  }
-  
-  // Limpiar menús
+  // ✅ Limpiar todos los menús del Shadow DOM
   this.hideContextMenu();
   this.closeOperatorDropdown();
   this.closeHeaderFilterDropdown();
   
-  // Resetear scroll tracking
-  this._lastScrollLeft = 0;
+  // ✅ Limpiar handlers y state
+  this._eventHandlers.clear();
+  this._selectedOperators.clear();
+  this._headerFilterSearchValues.clear();
+  this._headerFilterSelections.clear();
+  this._headerFilterExpandedState.clear();
+  this._identityMap.clear();
+  console.log('...')
 }
-
 
   attributeChangedCallback(name: string, oldValue: string, newValue: string) {
     if (oldValue !== newValue) {
@@ -825,7 +749,7 @@ public destroy(): void {
     
     this.remove();
     
-    // console.log("🗑️ Gridie destruido correctamente");
+    console.log("🗑️ Gridie destruido correctamente");
   } catch (error) {
     console.error("Error al destruir Gridie:", error);
   }
@@ -861,7 +785,7 @@ public setBody(data: any[]): void {
   
   this.render();
   
-  // console.log(`📊 Body actualizado: ${data.length} items`);
+  console.log(`📊 Body actualizado: ${data.length} items`);
 }
 
 
@@ -933,7 +857,7 @@ public addRow(row: any): boolean {
   // Re-aplicar filtros y sorting
   this.applyFiltersAndSorting();
   
-  // console.log(`✅ Gridie.addRow: Fila agregada exitosamente`);
+  console.log(`✅ Gridie.addRow: Fila agregada exitosamente`);
   return true;
 }
 
@@ -1012,83 +936,28 @@ get body(): any[] {
     }
   }
 
-  // private normalizeHeader(
-  //   header: string | GridieHeaderConfig,
-  //   position: number
-  // ): GridieHeaderConfig {
-  //   if (typeof header === "string") {
-  //     return {
-  //       label: header,
-  //       sortable: this._config.enableSort ?? true,
-  //       filterable: false,
-  //       type: "string",
-  //     };
-  //   }
-  //   return {
-  //     label: header.label || `Column ${position + 1}`,
-  //     sortable: header.sortable ?? this._config.enableSort ?? true,
-  //     filterable: header.filterable ?? false,
-  //     type: header.type || "string",
-  //     width: header.width,
-  //     filters: header.filters,
-  //   };
-  // }
-
-private normalizeHeader(
-  header: string | GridieHeaderConfig,
-  position: number
-): GridieHeaderConfig {
-  // ✅ CASO 1: Header como string simple
-  if (typeof header === "string") {
+  private normalizeHeader(
+    header: string | GridieHeaderConfig,
+    position: number
+  ): GridieHeaderConfig {
+    if (typeof header === "string") {
+      return {
+        label: header,
+        sortable: this._config.enableSort ?? true,
+        filterable: false,
+        type: "string",
+      };
+    }
     return {
-      label: header,
-      sortable: this._config.enableSort ?? true,
-      filterable: false,
-      type: "string",
-      // ✅ NUEVO: Si enableFilter está activo, agregar filters por defecto
-      filters: this._config.enableFilter ? {
-        filterRow: {
-          visible: false, // Usuario debe habilitarlo explícitamente
-          operators: this.getDefaultOperators("string")
-        }
-      } : undefined
+      label: header.label || `Column ${position + 1}`,
+      sortable: header.sortable ?? this._config.enableSort ?? true,
+      filterable: header.filterable ?? false,
+      type: header.type || "string",
+      width: header.width,
+      filters: header.filters,
     };
   }
 
-  // ✅ CASO 2: Header como objeto GridieHeaderConfig
-  const normalizedFilters: GridieFiltersConfig | undefined = header.filters ? {
-    // ✅ Normalizar filterRow (preservar TODOS los campos)
-    filterRow: header.filters.filterRow ? {
-      visible: header.filters.filterRow.visible ?? false,
-      // ✅ CRÍTICO: Preservar operadores personalizados O usar defaults
-      operators: header.filters.filterRow.operators 
-        ? [...header.filters.filterRow.operators] // Copia para evitar mutaciones
-        : this.getDefaultOperators(header.type || "string")
-    } : undefined,
-
-    // ✅ Normalizar headerFilter (preservar TODO)
-    headerFilter: header.filters.headerFilter ? {
-      visible: header.filters.headerFilter.visible ?? false,
-      values: header.filters.headerFilter.values,
-      parameters: header.filters.headerFilter.parameters,
-      showCount: header.filters.headerFilter.showCount,
-      search: header.filters.headerFilter.search,
-      dateHierarchy: header.filters.headerFilter.dateHierarchy,
-      timeFormat: header.filters.headerFilter.timeFormat,
-      locale: header.filters.headerFilter.locale
-    } : undefined
-  } : undefined;
-
-  return {
-    label: header.label || `Column ${position + 1}`,
-    sortable: header.sortable ?? this._config.enableSort ?? true,
-    filterable: header.filterable ?? false,
-    type: header.type || "string",
-    width: header.width,
-    filters: normalizedFilters,
-    timeFormat: header.timeFormat
-  };
-}
   private getCellValueByPosition(row: any, position: number): any {
     if (Array.isArray(row)) {
       return row[position];
@@ -1238,7 +1107,7 @@ public goToPage(page: number): void {
     }
   }));
   
-  // console.log(`📄 Navegado a página ${page}`);
+  console.log(`📄 Navegado a página ${page}`);
 }
 /**
  * Navega a la página siguiente
@@ -1310,7 +1179,7 @@ public setPageSize(size: number): void {
     }
   }));
   
- // console.log(`📊 Tamaño de página cambiado a ${size}`);
+  console.log(`📊 Tamaño de página cambiado a ${size}`);
 }
 
 
@@ -1426,109 +1295,97 @@ private calculatePageButtons(): (number | "ellipsis")[] {
     this.showContextMenu(event.clientX, event.clientY, columnIndex);
   }
 
+  private showContextMenu(x: number, y: number, columnIndex: number): void {
+    this.hideContextMenu();
 
+    //  CAMBIO: Crear dentro del shadow DOM con posición absoluta
+    const container = this.shadowRoot!.querySelector(
+      ".gridie-container"
+    ) as HTMLElement;
+    if (!container) return;
 
-private showContextMenu(x: number, y: number, columnIndex: number): void {
-  this.hideContextMenu();
-
-  const container = this.shadow.querySelector(".gridie-container") as HTMLElement;
-  if (!container) return;
-
-  const menu = document.createElement("div");
-  menu.className = "gridie-context-menu";
-
-  // ✅ CAMBIO: position: absolute (se mueve con scroll vertical)
-  // Convertir coordenadas del viewport a coordenadas del container
-  const containerRect = container.getBoundingClientRect();
-  const adjustedX = x - containerRect.left + container.scrollLeft;
-  const adjustedY = y - containerRect.top + container.scrollTop;
-
-  menu.style.position = "fixed";
-  menu.style.left = `${adjustedX}px`;
-  menu.style.top = `${adjustedY}px`;
-  menu.style.zIndex = "10000";
-
-  const hasMultipleSorts = this._sortingManager.getAllSorts().length > 1;
-  const hasColumnSort = this._sortingManager.getColumnSort(columnIndex) !== null;
-
-  menu.innerHTML = `
-    <div class="context-menu-item sort-asc-item" data-action="sort-asc">
-      <div class="sort-icon">${getFilterIcon("ascending")}</div>
-      <div class="sort-text">${this._lang.sorting.sortAscending}</div>
-    </div>
-
-    <div class="context-menu-item sort-desc-item" data-action="sort-desc">
-      <div class="sort-icon">${getFilterIcon("descending")}</div>
-      <div class="sort-text">${this._lang.sorting.sortDescending}</div>
-    </div>
-
-    ${hasColumnSort ? `
-      <div class="context-menu-divider"></div>
-
-      <div class="context-menu-item clear-sort-item" data-action="clear-sort">
-        <div class="sort-icon">${getFilterIcon("clearSorting")}</div>
-        <div class="sort-text">${this._lang.sorting.clearSorting}</div>
-      </div>
-    ` : ""}
-
-    ${hasMultipleSorts ? `
-      <div class="context-menu-divider"></div>
-
-      <div class="context-menu-item clear-all-sort-item" data-action="clear-all-sort">
-        <div class="sort-icon">${getFilterIcon("clearAllSorting")}</div>
-        <div class="sort-text">${this._lang.sorting.clearAllSorting}</div>
-      </div>
-    ` : ""}
-  `;
-
-  menu.addEventListener("click", (e) => {
-    const target = (e.target as HTMLElement).closest(".context-menu-item") as HTMLElement;
-    if (!target) return;
-
-    const action = target.dataset.action;
-    if (action) {
-      this.handleContextMenuAction(action, columnIndex);
-      this.hideContextMenu();
-    }
-  });
-
-  // ✅ Agregar al Shadow DOM
-  container.appendChild(menu);
-  this._contextMenu = menu;
-
-  // ✅ Ajustar si se sale del viewport
-  requestAnimationFrame(() => {
-    const menuRect = menu.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
 
-    let finalX = adjustedX;
-    let finalY = adjustedY;
+    // Calcular posición relativa al contenedor
+    const relativeX = x - containerRect.left + container.scrollLeft;
+    const relativeY = y - containerRect.top + container.scrollTop;
 
-    // Si se sale por la derecha del container
-    if (menuRect.right > containerRect.right) {
-      finalX = adjustedX - menuRect.width;
-    }
+    const menu = document.createElement("div");
+    menu.className = "gridie-context-menu";
+    menu.style.position = "absolute";
+    menu.style.left = `${relativeX}px`;
+    menu.style.top = `${relativeY}px`;
 
-    // Si se sale por abajo del container
-    if (menuRect.bottom > containerRect.bottom) {
-      finalY = adjustedY - menuRect.height;
-    }
+    const hasMultipleSorts = this._sortingManager.getAllSorts().length > 1;
+    const hasColumnSort =
+      this._sortingManager.getColumnSort(columnIndex) !== null;
 
-    // Si se sale por la izquierda
-    if (finalX < 10) {
-      finalX = 10;
-    }
+  menu.innerHTML = `
+  <div class="context-menu-item sort-asc-item" data-action="sort-asc">
+    <div class="sort-icon">${getFilterIcon("ascending")}</div>
+    <div class="sort-text">${this._lang.sorting.sortAscending}</div>
+  </div>
 
-    // Si se sale por arriba
-    if (finalY < 10) {
-      finalY = 10;
-    }
+  <div class="context-menu-item sort-desc-item" data-action="sort-desc">
+    <div class="sort-icon">${getFilterIcon("descending")}</div>
+    <div class="sort-text">${this._lang.sorting.sortDescending}</div>
+  </div>
 
-    // Aplicar ajustes finales
-    menu.style.left = `${finalX}px`;
-    menu.style.top = `${finalY}px`;
-  });
-}
+  ${hasColumnSort ? `
+    <div class="context-menu-divider"></div>
+
+    <div class="context-menu-item clear-sort-item" data-action="clear-sort">
+      <div class="sort-icon">${getFilterIcon("clearSorting")}</div>
+      <div class="sort-text">${this._lang.sorting.clearSorting}</div>
+    </div>
+  ` : ""}
+
+  ${hasMultipleSorts ? `
+    <div class="context-menu-divider"></div>
+
+    <div class="context-menu-item clear-all-sort-item" data-action="clear-all-sort">
+      <div class="sort-icon">${getFilterIcon("clearAllSorting")}</div>
+      <div class="sort-text">${this._lang.sorting.clearAllSorting}</div>
+    </div>
+  ` : ""}
+`;
+
+
+   menu.addEventListener("click", (e) => {
+  const target = (e.target as HTMLElement).closest(".context-menu-item") as HTMLElement;
+  if (!target) return;
+
+  const action = target.dataset.action;
+  if (action) {
+    this.handleContextMenuAction(action, columnIndex);
+    this.hideContextMenu();
+  }
+});
+
+    //  CAMBIO: Agregar al contenedor en lugar de document.body
+    container.appendChild(menu);
+    this._contextMenu = menu;
+
+    //  Ajustar posición si se sale del contenedor
+    setTimeout(() => {
+      const menuRect = menu.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+
+      // Si se sale por la derecha
+      if (menuRect.right > containerRect.right) {
+        const overflow = menuRect.right - containerRect.right;
+        menu.style.left = `${relativeX - overflow - 10}px`;
+      }
+
+      // Si se sale por abajo
+      if (menuRect.bottom > containerRect.bottom) {
+        const overflow = menuRect.bottom - containerRect.bottom;
+        menu.style.top = `${relativeY - overflow - 10}px`;
+      }
+    }, 0);
+
+    
+  }
 
   private hideContextMenu(): void {
     if (this._contextMenu) {
@@ -1589,9 +1446,130 @@ private updatePagination(): void {
 
   this._pagedBody = this._body.slice(startIndex, endIndex);
   
- // console.log(`📄 Paginación: Página ${this._currentPage}/${this._totalPages}, mostrando ${this._pagedBody.length} de ${this._totalItems} items (filtrados de ${this._originalBody.length} totales)`);
+  console.log(`📄 Paginación: Página ${this._currentPage}/${this._totalPages}, mostrando ${this._pagedBody.length} de ${this._totalItems} items (filtrados de ${this._originalBody.length} totales)`);
 }
 
+// private applyFiltersAndSorting(): void {
+//   // 1. Aplicar filtros de filterRow
+//   let filtered = this._filteringManager.applyFilters(
+//     this._originalBody,
+//     this.headers
+//   );
+
+//   // 2. ✅ APLICAR HEADER FILTERS (esto faltaba)
+//   if (this._headerFilterSelections.size > 0) {
+//     console.log("🔍 Aplicando header filters...");
+//     console.log("_headerFilterSelections.size:", this._headerFilterSelections.size);
+    
+//     filtered = filtered.filter((row: any) => {
+//       for (const [colIndex, selections] of this._headerFilterSelections.entries()) {
+//         if (selections.size === 0) continue;
+
+//         const cellValue = this.getCellValueByPosition(row, colIndex);
+//         const header = this.headers[colIndex];
+
+//         let matchFound = false;
+
+//         for (const selection of selections) {
+//           // ✅ CASO 1: Es un parameter con operator
+//           if (typeof selection === "object" && selection.operator) {
+//             // Para operadores de jerarquía de fechas (year, month)
+//             if (selection.operator === "year" || selection.operator === "month") {
+//               const date = new Date(cellValue);
+//               if (isNaN(date.getTime())) continue;
+
+//               switch (selection.operator) {
+//                 case "year":
+//                   if (date.getUTCFullYear() === selection.value)
+//                     matchFound = true;
+//                   break;
+//                 case "month":
+//                   if (
+//                     date.getUTCFullYear() === selection.year &&
+//                     date.getUTCMonth() === selection.value
+//                   ) {
+//                     matchFound = true;
+//                   }
+//                   break;
+//               }
+//             } else {
+//               // Para otros operadores (<, >, between, etc.)
+//               let valueToCompare = cellValue;
+              
+//               if (header.type === "number") {
+//                 valueToCompare = typeof cellValue === "string" 
+//                   ? parseFloat(cellValue) 
+//                   : cellValue;
+                
+//                 if (isNaN(valueToCompare)) continue;
+//               }
+              
+//               const result = this.evaluateParameterFilter(
+//                 valueToCompare,
+//                 selection,
+//                 header.type
+//               );
+
+//               if (result) {
+//                 matchFound = true;
+//               }
+//             }
+//           } else {
+//             // ✅ CASO 2: Es un valor simple o fecha específica
+//             if (header.type === "date") {
+//               const selectionStr = String(selection);
+//               const isHourFilter = /T\d{2}:\d{2}/.test(selectionStr);
+
+//               if (isHourFilter) {
+//                 const normalizedCell = this.normalizeDateTimeToISO(cellValue);
+//                 const normalizedSelection = this.normalizeDateTimeToISO(selection);
+
+//                 if (normalizedCell === normalizedSelection) {
+//                   matchFound = true;
+//                   break;
+//                 }
+//               } else {
+//                 const normalizedCell = this.normalizeDateToYYYYMMDD(cellValue);
+//                 const normalizedSelection = this.normalizeDateToYYYYMMDD(selection);
+
+//                 if (normalizedCell === normalizedSelection) {
+//                   matchFound = true;
+//                   break;
+//                 }
+//               }
+//             } else {
+//               if (
+//                 cellValue === selection ||
+//                 String(cellValue) === String(selection)
+//               ) {
+//                 matchFound = true;
+//                 break;
+//               }
+//             }
+//           }
+//         }
+
+//         if (!matchFound) return false;
+//       }
+
+//       return true;
+//     });
+//   }
+
+//   this._filteredBody = filtered;
+
+//   // 3. Aplicar sorting
+//   this._body = this._sortingManager.applySorts(
+//     this._filteredBody,
+//     this.headers
+//   );
+
+//   // 4. ✅ Aplicar paginación
+//   this.updatePagination();
+
+//   // 5. Actualizar UI
+//   this.updateTableContent();
+// }
 
 private applyFiltersAndSorting(): void {
   // 1. Aplicar filtros de filterRow
@@ -1602,8 +1580,8 @@ private applyFiltersAndSorting(): void {
 
   // 2. ✅ APLICAR HEADER FILTERS
   if (this._headerFilterSelections.size > 0) {
-    //console.log("🔍 Aplicando header filters...");
-    //console.log("_headerFilterSelections.size:", this._headerFilterSelections.size);
+    console.log("🔍 Aplicando header filters...");
+    console.log("_headerFilterSelections.size:", this._headerFilterSelections.size);
     
     filtered = filtered.filter((row: any) => {
       for (const [colIndex, selections] of this._headerFilterSelections.entries()) {
@@ -1729,32 +1707,32 @@ private evaluateParameterFilter(
   const filterValue = parameter.value;
   const filterValue2 = parameter.value2;
 
- // console.log("      🔧 evaluateParameterFilter");
- // console.log("        cellValue:", cellValue, `(tipo: ${typeof cellValue})`);
- // console.log("        operator:", operator);
- // console.log("        filterValue:", filterValue);
- // console.log("        filterValue2:", filterValue2);
- // console.log("        columnType:", columnType);
+  console.log("      🔧 evaluateParameterFilter");
+  console.log("        cellValue:", cellValue, `(tipo: ${typeof cellValue})`);
+  console.log("        operator:", operator);
+  console.log("        filterValue:", filterValue);
+  console.log("        filterValue2:", filterValue2);
+  console.log("        columnType:", columnType);
 
   //  NUEVO: Operador "in" para arrays
   if (operator === "in") {
     if (!Array.isArray(filterValue)) {
-    //  console.log("        ❌ 'in': filterValue no es un array");
+      console.log("        ❌ 'in': filterValue no es un array");
       return false;
     }
     const result = filterValue.includes(cellValue);
-   // console.log(`        in : ${JSON.stringify(filterValue)}.includes(${cellValue}) = ${result}`);
+    console.log(`        in : ${JSON.stringify(filterValue)}.includes(${cellValue}) = ${result}`);
     return result;
   }
 
   //  NUEVO: Operador "notin" para arrays
   if (operator === "notin") {
     if (!Array.isArray(filterValue)) {
-    //  console.log("        ❌ 'notin': filterValue no es un array");
+      console.log("        ❌ 'notin': filterValue no es un array");
       return false;
     }
     const result = !filterValue.includes(cellValue);
-   // console.log(`        notin : !${JSON.stringify(filterValue)}.includes(${cellValue}) = ${result}`);
+    console.log(`        notin : !${JSON.stringify(filterValue)}.includes(${cellValue}) = ${result}`);
     return result;
   }
 
@@ -1763,11 +1741,11 @@ private evaluateParameterFilter(
     const numCellValue = typeof cellValue === "number" ? cellValue : parseFloat(cellValue);
     const numFilterValue = typeof filterValue === "number" ? filterValue : parseFloat(filterValue);
     
-   // console.log("        numCellValue:", numCellValue);
-   // console.log("        numFilterValue:", numFilterValue);
+    console.log("        numCellValue:", numCellValue);
+    console.log("        numFilterValue:", numFilterValue);
     
     if (isNaN(numCellValue) || isNaN(numFilterValue)) {
-    //  console.log("        ❌ Valores inválidos (NaN)");
+      console.log("        ❌ Valores inválidos (NaN)");
       return false;
     }
 
@@ -1775,44 +1753,44 @@ private evaluateParameterFilter(
       case "=":
       case "equals":
         const equalsResult = numCellValue === numFilterValue;
-      //  console.log(`        = : ${numCellValue} === ${numFilterValue} = ${equalsResult}`);
+        console.log(`        = : ${numCellValue} === ${numFilterValue} = ${equalsResult}`);
         return equalsResult;
       case "<>":
       case "notequal":
         const notEqualResult = numCellValue !== numFilterValue;
-      //  console.log(`        <> : ${numCellValue} !== ${numFilterValue} = ${notEqualResult}`);
+        console.log(`        <> : ${numCellValue} !== ${numFilterValue} = ${notEqualResult}`);
         return notEqualResult;
       case "<":
         const ltResult = numCellValue < numFilterValue;
-      //  console.log(`        < : ${numCellValue} < ${numFilterValue} = ${ltResult}`);
+        console.log(`        < : ${numCellValue} < ${numFilterValue} = ${ltResult}`);
         return ltResult;
       case ">":
         const gtResult = numCellValue > numFilterValue;
-      //  console.log(`        > : ${numCellValue} > ${numFilterValue} = ${gtResult}`);
+        console.log(`        > : ${numCellValue} > ${numFilterValue} = ${gtResult}`);
         return gtResult;
       case "<=":
         const lteResult = numCellValue <= numFilterValue;
-      //  console.log(`        <= : ${numCellValue} <= ${numFilterValue} = ${lteResult}`);
+        console.log(`        <= : ${numCellValue} <= ${numFilterValue} = ${lteResult}`);
         return lteResult;
       case ">=":
         const gteResult = numCellValue >= numFilterValue;
-      //  console.log(`        >= : ${numCellValue} >= ${numFilterValue} = ${gteResult}`);
+        console.log(`        >= : ${numCellValue} >= ${numFilterValue} = ${gteResult}`);
         return gteResult;
       case "between":
         if (filterValue2 === undefined) {
-        //  console.log("        ❌ between: falta filterValue2");
+          console.log("        ❌ between: falta filterValue2");
           return false;
         }
         const numFilterValue2 = typeof filterValue2 === "number" ? filterValue2 : parseFloat(filterValue2);
         if (isNaN(numFilterValue2)) {
-        //  console.log("        ❌ between: filterValue2 es NaN");
+          console.log("        ❌ between: filterValue2 es NaN");
           return false;
         }
         const betweenResult = numCellValue >= numFilterValue && numCellValue <= numFilterValue2;
-      //  console.log(`        between : ${numCellValue} >= ${numFilterValue} && ${numCellValue} <= ${numFilterValue2} = ${betweenResult}`);
+        console.log(`        between : ${numCellValue} >= ${numFilterValue} && ${numCellValue} <= ${numFilterValue2} = ${betweenResult}`);
         return betweenResult;
       default:
-      //  console.log("        ❌ Operador no reconocido:", operator);
+        console.log("        ❌ Operador no reconocido:", operator);
         return false;
     }
   }
@@ -1949,8 +1927,8 @@ private evaluateParameterFilter(
 
 private updateTableContent(): void {
   //  AGREGAR STACK TRACE:
- // console.trace("📊 updateTableContent llamado desde:");
-  //console.log("📊 Filas a renderizar:", this.body.length);
+  console.trace("📊 updateTableContent llamado desde:");
+  console.log("📊 Filas a renderizar:", this.body.length);
   
   const thead = this.shadow.querySelector("thead tr:first-child");
   if (thead) {
@@ -2217,75 +2195,24 @@ private updatePaginationFooter(): void {
     }
   }
 
-  // private openOperatorDropdown(columnIndex: number): void {
-  //   // Cerrar cualquier dropdown abierto
-  //   this.closeOperatorDropdown();
-
-  //   this._activeOperatorDropdown = columnIndex;
-
-  //   const trigger = this.shadow.querySelector(
-  //     `.filter-operator-trigger[data-column-index="${columnIndex}"]`
-  //   ) as HTMLElement;
-  //   const menu = this.shadow.querySelector(
-  //     `.filter-operator-menu[data-column-index="${columnIndex}"]`
-  //   ) as HTMLElement;
-
-  //   if (trigger && menu) {
-  //     trigger.classList.add("active");
-  //     menu.classList.add("active");
-  //   }
-  // }
   private openOperatorDropdown(columnIndex: number): void {
-  // Cerrar cualquier dropdown abierto
-  this.closeOperatorDropdown();
+    // Cerrar cualquier dropdown abierto
+    this.closeOperatorDropdown();
 
-  this._activeOperatorDropdown = columnIndex;
+    this._activeOperatorDropdown = columnIndex;
 
-  const trigger = this.shadow.querySelector(
-    `.filter-operator-trigger[data-column-index="${columnIndex}"]`
-  ) as HTMLElement;
-  const menu = this.shadow.querySelector(
-    `.filter-operator-menu[data-column-index="${columnIndex}"]`
-  ) as HTMLElement;
+    const trigger = this.shadow.querySelector(
+      `.filter-operator-trigger[data-column-index="${columnIndex}"]`
+    ) as HTMLElement;
+    const menu = this.shadow.querySelector(
+      `.filter-operator-menu[data-column-index="${columnIndex}"]`
+    ) as HTMLElement;
 
-  if (trigger && menu) {
-    trigger.classList.add("active");
-    
-    // ✅ NUEVO: Calcular posición fixed relativa al viewport
-    const rect = trigger.getBoundingClientRect();
-    
-    menu.style.position = 'fixed';
-    menu.style.left = `${rect.left}px`;
-    menu.style.top = `${rect.bottom + 2}px`;
-    menu.style.minWidth = `${Math.max(200, rect.width)}px`;
-    
-    menu.classList.add("active");
-    
-    // ✅ NUEVO: Ajustar si se sale del viewport
-    requestAnimationFrame(() => {
-      const menuRect = menu.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      
-      // Si se sale por la derecha
-      if (menuRect.right > viewportWidth - 10) {
-        menu.style.left = `${rect.right - menuRect.width}px`;
-      }
-      
-      // Si se sale por abajo, mostrar arriba
-      if (menuRect.bottom > viewportHeight - 10) {
-        menu.style.top = `${rect.top - menuRect.height - 2}px`;
-      }
-      
-      // Si se sale por arriba
-      if (parseFloat(menu.style.top) < 10) {
-        menu.style.top = '10px';
-        menu.style.maxHeight = `${viewportHeight - 20}px`;
-        menu.style.overflowY = 'auto';
-      }
-    });
+    if (trigger && menu) {
+      trigger.classList.add("active");
+      menu.classList.add("active");
+    }
   }
-}
 
   private closeOperatorDropdown(): void {
     if (this._activeOperatorDropdown === null) return;
@@ -2966,11 +2893,18 @@ private updatePaginationFooter(): void {
         option.expanded &&
         parentExpanded
       ) {
-        
+        // console.log(
+        //   '  ➡️ Expanding children of "' +
+        //     option.text +
+        //     '" (' +
+        //     option.children.length +
+        //     " children)"
+        // );
         // Recursivamente aplanar los hijos
         const childrenFlattened = this.flattenHierarchy(option.children, true);
-      
-       
+        // console.log(
+        //   "  ➡️ Added " + childrenFlattened.length + " flattened children"
+        // );
         flattened.push(...childrenFlattened);
       }
     });
@@ -2979,336 +2913,21 @@ private updatePaginationFooter(): void {
     return flattened;
   }
 
-// private showHeaderFilterMenu(columnIndex: number, icon: HTMLElement): void {
-//   const container = this.shadowRoot!.querySelector(
-//     ".gridie-container"
-//   ) as HTMLElement;
-//   if (!container) return;
-
-//   const headers = this.headers;
-
-//   if (!headers || columnIndex >= headers.length) {
-//     console.error(
-//       "Header index out of bounds:",
-//       columnIndex,
-//       "headers:",
-//       headers
-//     );
-//     return;
-//   }
-
-//   if (!this._originalBody || this._originalBody.length === 0) {
-//     console.error("No data available");
-//     return;
-//   }
-
-//   const header = headers[columnIndex];
-//   const headerFilterConfig = header.filters?.headerFilter;
-//   if (!headerFilterConfig || !headerFilterConfig.visible) return;
-
-//   const selectedValues =
-//     this._headerFilterSelections.get(columnIndex) || new Set<any>();
-
-//   // Generar opciones
-//   let allOptions: any[] = [];
-
-//   // 1. Parameters (si existen)
-//   if (headerFilterConfig.parameters) {
-//     allOptions = allOptions.concat(
-//       headerFilterConfig.parameters.map((param: HeaderFilterParameter) => {
-//         const count = this.countMatchingRows(columnIndex, param);
-//         return {
-//           text: param.text,
-//           value: param,
-//           count: count,
-//           isParameter: true,
-//         };
-//       })
-//     );
-//   }
-
-//   // 2. Jerarquía de fechas (si existe)
-//   if (headerFilterConfig.dateHierarchy && header.type === "date") {
-//     const uniqueValues = this.extractUniqueValues(columnIndex);
-//     const dateOptions = this.generateDateHierarchy(
-//       columnIndex,
-//       uniqueValues,
-//       headerFilterConfig
-//     );
-//     allOptions = allOptions.concat(dateOptions);
-//   }
-//   // 3. Values predefinidos (si existen y NO hay jerarquía de fechas)
-//   else if (headerFilterConfig.values) {
-//     allOptions = allOptions.concat(
-//       headerFilterConfig.values.map((val: any) => {
-//         const count = this._originalBody.filter(
-//           (row: any) => this.getCellValueByPosition(row, columnIndex) === val
-//         ).length;
-//         return { text: String(val), value: val, count, isParameter: false };
-//       })
-//     );
-//   }
-//   // 4. Valores únicos automáticos (si NO hay values ni jerarquía)
-//   else if (!headerFilterConfig.dateHierarchy) {
-//     const uniqueValues = this.extractUniqueValues(columnIndex);
-//     allOptions = allOptions.concat(
-//       Array.from(uniqueValues).map((val: any) => {
-//         const displayValue = this.formatCellValue(val, header);
-//         const count = this._originalBody.filter(
-//           (row: any) => this.getCellValueByPosition(row, columnIndex) === val
-//         ).length;
-//         return {
-//           text: displayValue,
-//           value: val,
-//           count: headerFilterConfig.showCount !== false ? count : null,
-//           isParameter: false,
-//         };
-//       })
-//     );
-//   }
-
-//   // Filtrar opciones según búsqueda
-//   let filteredOptions = allOptions;
-//   const searchTerm = (
-//     this._headerFilterSearchValues.get(columnIndex) || ""
-//   ).toLowerCase();
-//   if (searchTerm) {
-//     filteredOptions = allOptions.filter((opt: any) =>
-//       this.normalizeStringForSearch(opt.text).includes(
-//         this.normalizeStringForSearch(searchTerm)
-//       )
-//     );
-//   }
-
-//   // Aplanar jerarquía si existe
-//   const hasHierarchy = allOptions.some((opt: any) => opt.expandable);
-
-//   if (hasHierarchy) {
-//     filteredOptions = this.flattenHierarchy(filteredOptions);
-//   }
-
-//   const showSelectAll = !hasHierarchy;
-
-//   // Calcular estados de checkboxes
-//   const selectableOptions = filteredOptions.filter(
-//     (opt: any) => !opt.expandable
-//   );
-//   const allSelected =
-//     selectableOptions.length > 0 &&
-//     selectableOptions.every((opt: any) => {
-//       if (opt.isParameter) {
-//         return Array.from(selectedValues).some(
-//           (val: any) =>
-//             typeof val === "object" &&
-//             val.operator === opt.value.operator &&
-//             JSON.stringify(val) === JSON.stringify(opt.value)
-//         );
-//       }
-//       return selectedValues.has(opt.value);
-//     });
-
-//   const someSelected = selectableOptions.some((opt: any) => {
-//     if (opt.isParameter) {
-//       return Array.from(selectedValues).some(
-//         (val: any) =>
-//           typeof val === "object" &&
-//           val.operator === opt.value.operator &&
-//           JSON.stringify(val) === JSON.stringify(opt.value)
-//       );
-//     }
-//     return selectedValues.has(opt.value);
-//   });
-
-//   // Crear menú
-//   const menu = document.createElement("div");
-//   menu.className = "header-filter-menu";
-//   menu.dataset.columnIndex = String(columnIndex);
-
-//   // ✅ SOLUCIÓN: position: fixed con coordenadas del viewport
-//   const iconRect = icon.getBoundingClientRect();
-
-//   menu.style.position = "fixed";
-//   menu.style.left = `${iconRect.left}px`;
-//   menu.style.top = `${iconRect.bottom + 4}px`;
-//   menu.style.zIndex = "10000";
-
-//   let menuHTML = "";
-
-//   // Campo de búsqueda (si está habilitado)
-//   if (headerFilterConfig.search) {
-//     const searchValue = this._headerFilterSearchValues.get(columnIndex) || "";
-//     menuHTML += `
-//     <div class="header-filter-search">
-//       <input 
-//         type="text" 
-//         placeholder="Buscar..." 
-//         data-search-column="${columnIndex}"
-//         value="${searchValue}"
-//       />
-//     </div>
-//   `;
-//   }
-
-//   // Checkbox "Seleccionar todos" (solo si no hay jerarquía)
-//   if (showSelectAll) {
-//     menuHTML += `
-//     <div class="header-filter-option header-filter-select-all" data-action="select-all">
-//       <input 
-//         type="checkbox" 
-//         ${allSelected ? "checked" : ""} 
-//         ${someSelected && !allSelected ? "data-indeterminate='true'" : ""}
-//       />
-//       <span>Seleccionar todos</span>
-//     </div>
-//     ${
-//       headerFilterConfig.parameters &&
-//       allOptions.some((opt: any) => !opt.isParameter)
-//         ? '<div class="header-filter-separator"></div>'
-//         : ""
-//     }
-//   `;
-//   }
-
-//   // Renderizar cada opción con su índice correcto
-//   filteredOptions.forEach((option: any, optIndex: number) => {
-//     // Skip separators
-//     if (option.separator) {
-//       menuHTML += `<div class="header-filter-separator"></div>`;
-//       return;
-//     }
-
-//     const isSelected = (() => {
-//       if (option.expandable) return false;
-
-//       if (option.isParameter) {
-//         return Array.from(selectedValues).some((val: any) => {
-//           if (typeof val !== "object" || !val.operator) return false;
-          
-//           if (val.operator !== option.value.operator) return false;
-          
-//           if (Array.isArray(val.value) && Array.isArray(option.value.value)) {
-//             if (val.value.length !== option.value.value.length) return false;
-//             return val.value.every((v: any) => option.value.value.includes(v));
-//           }
-          
-//           if (val.value !== option.value.value) return false;
-//           if (val.value2 !== option.value.value2) return false;
-          
-//           return true;
-//         });
-//       }
-//       return selectedValues.has(option.value);
-//     })();
-
-//     const level = option.level || 0;
-//     const indent = level * 16;
-
-//     if (option.expandable) {
-//       const expandIcon = option.expanded ? "collapse-icon" : "expand-icon";
-
-//       menuHTML += `
-//     <div class="header-filter-option-parent" 
-//          data-option-index="${optIndex}" 
-//          data-option-id="${option.id || ""}"
-//          style="padding-left: ${indent + 12}px;">
-//       <span class="header-filter-expand-icon">${getFilterIcon(expandIcon)}</span>
-//       <span>${option.text}${
-//         option.count !== null && option.count !== undefined
-//           ? ` (${option.count})`
-//           : ""
-//       }</span>
-//     </div>
-//   `;
-//     } else {
-//       menuHTML += `
-//     <div class="header-filter-option" 
-//          data-option-index="${optIndex}"
-//          style="padding-left: ${indent + 12}px;">
-//       <input type="checkbox" ${isSelected ? "checked" : ""} />
-//       <span>${option.text}${
-//         option.count !== null && option.count !== undefined
-//           ? ` (${option.count})`
-//           : ""
-//       }</span>
-//     </div>
-//   `;
-//     }
-//   });
-
-//   menu.innerHTML = menuHTML;
-
-//   if (showSelectAll) {
-//     setTimeout(() => {
-//       const selectAllCheckbox = menu.querySelector(
-//         '.header-filter-select-all input[type="checkbox"]'
-//       ) as HTMLInputElement;
-//       if (
-//         selectAllCheckbox &&
-//         selectAllCheckbox.dataset.indeterminate === "true"
-//       ) {
-//         selectAllCheckbox.indeterminate = true;
-//       }
-//     }, 0);
-//   }
-
-//   this._headerFilterMenu = menu;
-//   container.appendChild(menu);
-
-//   // ✅ Ajustar si se sale del viewport
-//   requestAnimationFrame(() => {
-//     const menuRect = menu.getBoundingClientRect();
-//     const viewportWidth = window.innerWidth;
-//     const viewportHeight = window.innerHeight;
-
-//     let adjustedX = iconRect.left;
-//     let adjustedY = iconRect.bottom + 4;
-
-//     // Si se sale por la derecha
-//     if (menuRect.right > viewportWidth - 10) {
-//       adjustedX = viewportWidth - menuRect.width - 10;
-//     }
-
-//     // Si se sale por la izquierda
-//     if (adjustedX < 10) {
-//       adjustedX = 10;
-//     }
-
-//     // Si se sale por abajo → posicionar ARRIBA del icono
-//     if (menuRect.bottom > viewportHeight - 10) {
-//       adjustedY = iconRect.top - menuRect.height - 4;
-//     }
-
-//     // Si también se sale por arriba, usar la mejor opción con scroll interno
-//     if (adjustedY < 10) {
-//       adjustedY = iconRect.bottom + 4;
-//       const maxHeight = viewportHeight - iconRect.bottom - 20;
-//       menu.style.maxHeight = `${maxHeight}px`;
-//       menu.style.overflowY = "auto";
-//     }
-
-//     // Aplicar ajustes
-//     menu.style.left = `${adjustedX}px`;
-//     menu.style.top = `${adjustedY}px`;
-//   });
-
-//   this.attachHeaderFilterMenuEvents(
-//     columnIndex,
-//     filteredOptions,
-//     allOptions,
-//     hasHierarchy
-//   );
-// }
-
-  // Normalizar string para búsqueda
-  
   private showHeaderFilterMenu(columnIndex: number, icon: HTMLElement): void {
-  const container = this.shadowRoot!.querySelector(".gridie-container") as HTMLElement;
+  const container = this.shadowRoot!.querySelector(
+    ".gridie-container"
+  ) as HTMLElement;
   if (!container) return;
 
   const headers = this.headers;
 
   if (!headers || columnIndex >= headers.length) {
-    console.error("Header index out of bounds:", columnIndex, "headers:", headers);
+    console.error(
+      "Header index out of bounds:",
+      columnIndex,
+      "headers:",
+      headers
+    );
     return;
   }
 
@@ -3317,11 +2936,15 @@ private updatePaginationFooter(): void {
     return;
   }
 
+  const containerRect = container.getBoundingClientRect();
+  const iconRect = icon.getBoundingClientRect();
+
   const header = headers[columnIndex];
   const headerFilterConfig = header.filters?.headerFilter;
   if (!headerFilterConfig || !headerFilterConfig.visible) return;
 
-  const selectedValues = this._headerFilterSelections.get(columnIndex) || new Set<any>();
+  const selectedValues =
+    this._headerFilterSelections.get(columnIndex) || new Set<any>();
 
   // Generar opciones
   let allOptions: any[] = [];
@@ -3344,7 +2967,11 @@ private updatePaginationFooter(): void {
   // 2. Jerarquía de fechas (si existe)
   if (headerFilterConfig.dateHierarchy && header.type === "date") {
     const uniqueValues = this.extractUniqueValues(columnIndex);
-    const dateOptions = this.generateDateHierarchy(columnIndex, uniqueValues, headerFilterConfig);
+    const dateOptions = this.generateDateHierarchy(
+      columnIndex,
+      uniqueValues,
+      headerFilterConfig
+    );
     allOptions = allOptions.concat(dateOptions);
   }
   // 3. Values predefinidos (si existen y NO hay jerarquía de fechas)
@@ -3379,10 +3006,14 @@ private updatePaginationFooter(): void {
 
   // Filtrar opciones según búsqueda
   let filteredOptions = allOptions;
-  const searchTerm = (this._headerFilterSearchValues.get(columnIndex) || "").toLowerCase();
+  const searchTerm = (
+    this._headerFilterSearchValues.get(columnIndex) || ""
+  ).toLowerCase();
   if (searchTerm) {
     filteredOptions = allOptions.filter((opt: any) =>
-      this.normalizeStringForSearch(opt.text).includes(this.normalizeStringForSearch(searchTerm))
+      this.normalizeStringForSearch(opt.text).includes(
+        this.normalizeStringForSearch(searchTerm)
+      )
     );
   }
 
@@ -3396,7 +3027,9 @@ private updatePaginationFooter(): void {
   const showSelectAll = !hasHierarchy;
 
   // Calcular estados de checkboxes
-  const selectableOptions = filteredOptions.filter((opt: any) => !opt.expandable);
+  const selectableOptions = filteredOptions.filter(
+    (opt: any) => !opt.expandable
+  );
   const allSelected =
     selectableOptions.length > 0 &&
     selectableOptions.every((opt: any) => {
@@ -3428,17 +3061,13 @@ private updatePaginationFooter(): void {
   menu.className = "header-filter-menu";
   menu.dataset.columnIndex = String(columnIndex);
 
-  // ✅ CAMBIO: position: absolute (se mueve con scroll vertical)
-  const containerRect = container.getBoundingClientRect();
-  const iconRect = icon.getBoundingClientRect();
-  
+  // Calcular posición
   const x = iconRect.left - containerRect.left + container.scrollLeft;
   const y = iconRect.bottom - containerRect.top + container.scrollTop + 4;
 
   menu.style.position = "absolute";
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
-  menu.style.zIndex = "10000";
 
   let menuHTML = "";
 
@@ -3469,14 +3098,15 @@ private updatePaginationFooter(): void {
       <span>Seleccionar todos</span>
     </div>
     ${
-      headerFilterConfig.parameters && allOptions.some((opt: any) => !opt.isParameter)
+      headerFilterConfig.parameters &&
+      allOptions.some((opt: any) => !opt.isParameter)
         ? '<div class="header-filter-separator"></div>'
         : ""
     }
   `;
   }
 
-  // Renderizar cada opción con su índice correcto
+  //  CORRECCIÓN: Renderizar cada opción con su índice correcto
   filteredOptions.forEach((option: any, optIndex: number) => {
     // Skip separators
     if (option.separator) {
@@ -3485,27 +3115,34 @@ private updatePaginationFooter(): void {
     }
 
     const isSelected = (() => {
-      if (option.expandable) return false;
+  if (option.expandable) return false;
 
-      if (option.isParameter) {
-        return Array.from(selectedValues).some((val: any) => {
-          if (typeof val !== "object" || !val.operator) return false;
-          
-          if (val.operator !== option.value.operator) return false;
-          
-          if (Array.isArray(val.value) && Array.isArray(option.value.value)) {
-            if (val.value.length !== option.value.value.length) return false;
-            return val.value.every((v: any) => option.value.value.includes(v));
-          }
-          
-          if (val.value !== option.value.value) return false;
-          if (val.value2 !== option.value.value2) return false;
-          
-          return true;
-        });
+  if (option.isParameter) {
+    //  CORRECCIÓN: Comparación más robusta para parameters
+    return Array.from(selectedValues).some((val: any) => {
+      if (typeof val !== "object" || !val.operator) return false;
+      
+      // Comparar operator
+      if (val.operator !== option.value.operator) return false;
+      
+      // Comparar value (puede ser array para "in")
+      if (Array.isArray(val.value) && Array.isArray(option.value.value)) {
+        // Comparar arrays
+        if (val.value.length !== option.value.value.length) return false;
+        return val.value.every((v: any) => option.value.value.includes(v));
       }
-      return selectedValues.has(option.value);
-    })();
+      
+      // Comparar valores simples
+      if (val.value !== option.value.value) return false;
+      
+      // Comparar value2 si existe
+      if (val.value2 !== option.value.value2) return false;
+      
+      return true;
+    });
+  }
+  return selectedValues.has(option.value);
+})();
 
     const level = option.level || 0;
     const indent = level * 16;
@@ -3518,20 +3155,27 @@ private updatePaginationFooter(): void {
          data-option-index="${optIndex}" 
          data-option-id="${option.id || ""}"
          style="padding-left: ${indent + 12}px;">
-      <span class="header-filter-expand-icon">${getFilterIcon(expandIcon)}</span>
+      <span class="header-filter-expand-icon">${getFilterIcon(
+        expandIcon
+      )}</span>
       <span>${option.text}${
-        option.count !== null && option.count !== undefined ? ` (${option.count})` : ""
+        option.count !== null && option.count !== undefined
+          ? ` (${option.count})`
+          : ""
       }</span>
     </div>
   `;
     } else {
+      //  CRÍTICO: Asegurar que data-option-index siempre tenga un valor válido
       menuHTML += `
     <div class="header-filter-option" 
          data-option-index="${optIndex}"
          style="padding-left: ${indent + 12}px;">
       <input type="checkbox" ${isSelected ? "checked" : ""} />
       <span>${option.text}${
-        option.count !== null && option.count !== undefined ? ` (${option.count})` : ""
+        option.count !== null && option.count !== undefined
+          ? ` (${option.count})`
+          : ""
       }</span>
     </div>
   `;
@@ -3545,7 +3189,10 @@ private updatePaginationFooter(): void {
       const selectAllCheckbox = menu.querySelector(
         '.header-filter-select-all input[type="checkbox"]'
       ) as HTMLInputElement;
-      if (selectAllCheckbox && selectAllCheckbox.dataset.indeterminate === "true") {
+      if (
+        selectAllCheckbox &&
+        selectAllCheckbox.dataset.indeterminate === "true"
+      ) {
         selectAllCheckbox.indeterminate = true;
       }
     }, 0);
@@ -3554,45 +3201,28 @@ private updatePaginationFooter(): void {
   this._headerFilterMenu = menu;
   container.appendChild(menu);
 
-  // ✅ Ajustar si se sale del viewport
-  requestAnimationFrame(() => {
+  setTimeout(() => {
     const menuRect = menu.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
 
-    let adjustedX = x;
-    let adjustedY = y;
-
-    // Si se sale por la derecha
-    if (menuRect.right > containerRect.right) {
-      adjustedX = containerRect.width - menuRect.width - 10 + container.scrollLeft;
-    }
-
-    // Si se sale por la izquierda
-    if (adjustedX < 10) {
-      adjustedX = 10;
-    }
-
-    // Si se sale por abajo → posicionar ARRIBA del icono
     if (menuRect.bottom > containerRect.bottom) {
-      adjustedY = iconRect.top - containerRect.top + container.scrollTop - menuRect.height - 4;
+      const overflow = menuRect.bottom - containerRect.bottom;
+      container.style.minHeight = `${
+        container.offsetHeight + overflow + 20
+      }px`;
     }
+  }, 0);
 
-    // Si también se sale por arriba, usar la mejor opción con scroll interno
-    if (adjustedY < 10) {
-      adjustedY = iconRect.bottom - containerRect.top + container.scrollTop + 4;
-      const maxHeight = containerRect.bottom - iconRect.bottom - 20;
-      menu.style.maxHeight = `${maxHeight}px`;
-      menu.style.overflowY = "auto";
-    }
+  this.attachHeaderFilterMenuEvents(
+    columnIndex,
+    filteredOptions,
+    allOptions,
+    hasHierarchy
+  );
 
-    // Aplicar ajustes
-    menu.style.left = `${adjustedX}px`;
-    menu.style.top = `${adjustedY}px`;
-  });
-
-  this.attachHeaderFilterMenuEvents(columnIndex, filteredOptions, allOptions, hasHierarchy);
 }
-  
+
+  // Normalizar string para búsqueda
   private normalizeStringForSearch(str: string): string {
     return str
       .toLowerCase()
@@ -3704,7 +3334,7 @@ private attachHeaderFilterMenuEvents(
     
     if (!optionIndexStr) {
       console.error("❌ Selectable element missing data-option-index attribute");
-      //console.log("Element HTML:", (option as HTMLElement).outerHTML);
+      console.log("Element HTML:", (option as HTMLElement).outerHTML);
       return;
     }
     
@@ -3739,7 +3369,14 @@ private attachHeaderFilterMenuEvents(
     columnIndex: number,
     optionData: any
   ): void {
-    
+    // console.log("=== EXPAND TOGGLE ===");
+    // console.log("columnIndex:", columnIndex);
+    // console.log("optionData:", optionData);
+    // console.log("optionData.id:", optionData.id);
+    // console.log(
+    //   "Current expanded state:",
+    //   this._headerFilterExpandedState.get(optionData.id)
+    // );
 
     if (!optionData || !optionData.id) {
       console.error("❌ Option data missing or no ID:", optionData);
@@ -3750,11 +3387,16 @@ private attachHeaderFilterMenuEvents(
       this._headerFilterExpandedState.get(optionData.id) || false;
     const newState = !currentState;
 
-   
+    // console.log(
+    //   ` Setting ${optionData.id} from ${currentState} to ${newState}`
+    // );
 
     this._headerFilterExpandedState.set(optionData.id, newState);
 
-  
+    // console.log(
+    //   "All expanded states:",
+    //   Array.from(this._headerFilterExpandedState.entries())
+    // );
 
     const scrollTop = this._headerFilterMenu?.scrollTop || 0;
 
@@ -3846,9 +3488,9 @@ private handleHeaderFilterOptionClick(
   columnIndex: number,
   optionData: any
 ): void {
-  //console.log("=== handleHeaderFilterOptionClick ===");
-  //console.log("columnIndex:", columnIndex);
-  //console.log("optionData:", optionData);
+  console.log("=== handleHeaderFilterOptionClick ===");
+  console.log("columnIndex:", columnIndex);
+  console.log("optionData:", optionData);
   
   const selectedValues =
     this._headerFilterSelections.get(columnIndex) || new Set<any>();
@@ -3856,7 +3498,7 @@ private handleHeaderFilterOptionClick(
 
   // Toggle selección
   if (optionData.isParameter) {
-   // console.log("Es un parameter");
+    console.log("Es un parameter");
     
     const cleanParameter = {
       operator: optionData.value.operator,
@@ -3866,7 +3508,7 @@ private handleHeaderFilterOptionClick(
       ...(optionData.value.year !== undefined && { year: optionData.value.year }),
     };
     
-    //console.log("Clean parameter:", cleanParameter);
+    console.log("Clean parameter:", cleanParameter);
     
     const existingParam = Array.from(newSelection).find(
       (val: any) =>
@@ -3876,14 +3518,14 @@ private handleHeaderFilterOptionClick(
     );
 
     if (existingParam) {
-     // console.log("Removiendo parameter existente");
+      console.log("Removiendo parameter existente");
       newSelection.delete(existingParam);
     } else {
-     // console.log("Agregando clean parameter:", cleanParameter);
+      console.log("Agregando clean parameter:", cleanParameter);
       newSelection.add(cleanParameter);
     }
   } else {
-    //console.log("Es un valor simple");
+    console.log("Es un valor simple");
     if (newSelection.has(optionData.value)) {
       newSelection.delete(optionData.value);
     } else {
@@ -3891,7 +3533,7 @@ private handleHeaderFilterOptionClick(
     }
   }
 
- // console.log("Nueva selección:", Array.from(newSelection));
+  console.log("Nueva selección:", Array.from(newSelection));
   this._headerFilterSelections.set(columnIndex, newSelection);
 
   //  NUEVO: Resetear a página 1 al filtrar
@@ -4018,33 +3660,11 @@ private handleHeaderFilterOptionClick(
 
   // ============= FILTER ROW METHODS =============
 
-  // private hasFilterRow(): boolean {
-  //   return this.headers.some(
-  //     (header) => header.filters?.filterRow?.visible === true
-  //   );
-  // }
-
   private hasFilterRow(): boolean {
-  // console.log("🔍 ========== hasFilterRow START ==========");
-  // console.log("   Total headers:", this.headers.length);
-  
-  const headersWithFilterRow = this.headers.filter((header, index) => {
-    const hasFilter = header.filters?.filterRow?.visible === true;
-    // console.log(`   Header ${index} (${header.label}):`, {
-    //   filters: header.filters,
-    //   filterRow: header.filters?.filterRow,
-    //   visible: header.filters?.filterRow?.visible,
-    //   result: hasFilter
-    // });
-    return hasFilter;
-  });
-  
-  // console.log(`   ✅ Total con filterRow visible:`, headersWithFilterRow.length);
-  // console.log(`   Headers con filterRow:`, headersWithFilterRow.map(h => h.label));
-  // console.log("🔍 ========== hasFilterRow END ==========");
-  
-  return headersWithFilterRow.length > 0;
-}
+    return this.headers.some(
+      (header) => header.filters?.filterRow?.visible === true
+    );
+  }
 
   private getDefaultOperators(type: string): FilterOperator[] {
     switch (type) {
@@ -4074,159 +3694,24 @@ private handleHeaderFilterOptionClick(
     }
   }
 
-  // private getOperatorsForColumn(header: GridieHeaderConfig): FilterOperator[] {
-  //   if (header.filters?.filterRow?.operators) {
-  //     return [...header.filters.filterRow.operators]; // ← Crea una copia
-  //   }
-  //   return this.getDefaultOperators(header.type || "string");
-  // }
-
-  /**
- * Obtiene los operadores disponibles para una columna
- * PRIORIDAD:
- * 1. Operadores personalizados en header.filters.filterRow.operators
- * 2. Operadores por defecto según el tipo de dato
- * 
- * @param header - Configuración del header
- * @returns Array de operadores válidos
- */
-private getOperatorsForColumn(header: GridieHeaderConfig): FilterOperator[] {
-  // ✅ PASO 1: Intentar usar operadores personalizados
-  if (header.filters?.filterRow?.operators) {
-    const customOps = header.filters.filterRow.operators;
-    
-    // Validar que sea un array no vacío
-    if (Array.isArray(customOps) && customOps.length > 0) {
-      //console.log(`🎯 Usando operadores personalizados para "${header.label}":`, customOps);
-      return [...customOps]; // Retornar copia
+  private getOperatorsForColumn(header: GridieHeaderConfig): FilterOperator[] {
+    if (header.filters?.filterRow?.operators) {
+      return [...header.filters.filterRow.operators]; // ← Crea una copia
     }
-    
-    console.warn(`⚠️ Operadores personalizados inválidos para "${header.label}", usando defaults`);
+    return this.getDefaultOperators(header.type || "string");
   }
-
-  // ✅ PASO 2: Usar operadores por defecto según tipo
-  const defaultOps = this.getDefaultOperators(header.type || "string");
-  //console.log(`📋 Usando operadores por defecto para "${header.label}" (${header.type}):`, defaultOps);
-  
-  return defaultOps;
-}
-  // private renderFilterRow(): string {
-  //   if (!this.hasFilterRow()) return "";
-
-  //   const headers = this.headers;
-
-  //   return `
-  //   <tr class="filter-row">
-  //     ${headers
-  //       .map((header, index) => {
-  //         if (!header.filters?.filterRow?.visible) {
-  //           return `<td></td>`;
-  //         }
-
-  //         const operators = this.getOperatorsForColumn(header);
-  //         const currentFilter = this._filteringManager.getColumnFilter(index);
-  //         const currentOperator = this.getCurrentOperator(index);
-  //         const currentValue = currentFilter?.value || "";
-  //         const currentValue2 = currentFilter?.value2 || "";
-
-  //         // Layout especial para "between"
-  //         if (currentOperator === "between") {
-  //           return `
-  //           <td>
-  //             <div class="filter-cell">
-  //               <div class="filter-cell-row">
-  //                 ${this.renderOperatorDropdown(
-  //                   index,
-  //                   operators,
-  //                   currentOperator
-  //                 )}
-  //                 <div class="filter-between-container">
-  //                   <div class="filter-between-row">
-  //                     <span class="filter-between-label">${
-  //                       this._lang.filtering.placeholders.betweenFrom
-  //                     }</span>
-  //                     ${this.renderFilterInput(
-  //                       header,
-  //                       index,
-  //                       currentOperator,
-  //                       currentValue,
-  //                       false
-  //                     )}
-  //                   </div>
-  //                   <div class="filter-between-row">
-  //                     <span class="filter-between-label">${
-  //                       this._lang.filtering.placeholders.betweenTo
-  //                     }</span>
-  //                     ${this.renderFilterInput(
-  //                       header,
-  //                       index,
-  //                       currentOperator,
-  //                       currentValue2,
-  //                       true
-  //                     )}
-  //                   </div>
-  //                 </div>
-  //               </div>
-  //             </div>
-  //           </td>
-  //         `;
-  //         }
-
-  //         // Layout normal para otros operadores
-  //         return `
-  //         <td>
-  //           <div class="filter-cell">
-  //             <div class="filter-cell-row">
-  //               ${this.renderOperatorDropdown(
-  //                 index,
-  //                 operators,
-  //                 currentOperator
-  //               )}
-  //               ${this.renderFilterInput(
-  //                 header,
-  //                 index,
-  //                 currentOperator,
-  //                 currentValue,
-  //                 false
-  //               )}
-  //             </div>
-  //           </div>
-  //         </td>
-  //       `;
-  //       })
-  //       .join("")}
-  //   </tr>
-  // `;
-  // }
-
   private renderFilterRow(): string {
-  // console.log("🔍 ========== renderFilterRow START ==========");
-  // console.log("   hasFilterRow():", this.hasFilterRow());
-  
-  if (!this.hasFilterRow()) {
-    //console.log("   ❌ Retornando vacío (hasFilterRow = false)");
-    return "";
-  }
+    if (!this.hasFilterRow()) return "";
 
-  const headers = this.headers;
-  //console.log("   Headers a procesar:", headers.length);
+    const headers = this.headers;
 
-  const filterRowHTML = `
+    return `
     <tr class="filter-row">
       ${headers
         .map((header, index) => {
-          // console.log(`   📋 Procesando header ${index} (${header.label}):`, {
-          //   visible: header.filters?.filterRow?.visible,
-          //   hasFilters: !!header.filters,
-          //   hasFilterRow: !!header.filters?.filterRow
-          // });
-
           if (!header.filters?.filterRow?.visible) {
-            //console.log(`      ⚠️ ${header.label}: filterRow NO visible`);
             return `<td></td>`;
           }
-
-          //console.log(`      ✅ ${header.label}: filterRow SÍ visible`);
 
           const operators = this.getOperatorsForColumn(header);
           const currentFilter = this._filteringManager.getColumnFilter(index);
@@ -4234,24 +3719,41 @@ private getOperatorsForColumn(header: GridieHeaderConfig): FilterOperator[] {
           const currentValue = currentFilter?.value || "";
           const currentValue2 = currentFilter?.value2 || "";
 
-          //console.log(`      Operadores:`, operators);
-          //console.log(`      Current operator:`, currentOperator);
-
           // Layout especial para "between"
           if (currentOperator === "between") {
             return `
             <td>
               <div class="filter-cell">
                 <div class="filter-cell-row">
-                  ${this.renderOperatorDropdown(index, operators, currentOperator)}
+                  ${this.renderOperatorDropdown(
+                    index,
+                    operators,
+                    currentOperator
+                  )}
                   <div class="filter-between-container">
                     <div class="filter-between-row">
-                      <span class="filter-between-label">${this._lang.filtering.placeholders.betweenFrom}</span>
-                      ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
+                      <span class="filter-between-label">${
+                        this._lang.filtering.placeholders.betweenFrom
+                      }</span>
+                      ${this.renderFilterInput(
+                        header,
+                        index,
+                        currentOperator,
+                        currentValue,
+                        false
+                      )}
                     </div>
                     <div class="filter-between-row">
-                      <span class="filter-between-label">${this._lang.filtering.placeholders.betweenTo}</span>
-                      ${this.renderFilterInput(header, index, currentOperator, currentValue2, true)}
+                      <span class="filter-between-label">${
+                        this._lang.filtering.placeholders.betweenTo
+                      }</span>
+                      ${this.renderFilterInput(
+                        header,
+                        index,
+                        currentOperator,
+                        currentValue2,
+                        true
+                      )}
                     </div>
                   </div>
                 </div>
@@ -4265,8 +3767,18 @@ private getOperatorsForColumn(header: GridieHeaderConfig): FilterOperator[] {
           <td>
             <div class="filter-cell">
               <div class="filter-cell-row">
-                ${this.renderOperatorDropdown(index, operators, currentOperator)}
-                ${this.renderFilterInput(header, index, currentOperator, currentValue, false)}
+                ${this.renderOperatorDropdown(
+                  index,
+                  operators,
+                  currentOperator
+                )}
+                ${this.renderFilterInput(
+                  header,
+                  index,
+                  currentOperator,
+                  currentValue,
+                  false
+                )}
               </div>
             </div>
           </td>
@@ -4275,42 +3787,48 @@ private getOperatorsForColumn(header: GridieHeaderConfig): FilterOperator[] {
         .join("")}
     </tr>
   `;
+  }
+  private renderOperatorDropdown(
+    columnIndex: number,
+    operators: FilterOperator[],
+    currentOperator: FilterOperator
+  ): string {
+    const isActive = this._activeOperatorDropdown === columnIndex;
 
-  //console.log("   📏 HTML generado (longitud):", filterRowHTML.length);
-  //console.log("   📄 HTML preview:", filterRowHTML.substring(0, 200) + "...");
-  //console.log("🔍 ========== renderFilterRow END ==========");
-
-  return filterRowHTML;
-}
-private renderOperatorDropdown(
-  columnIndex: number,
-  operators: FilterOperator[],
-  currentOperator: FilterOperator
-): string {
-  const isActive = this._activeOperatorDropdown === columnIndex;
-
-  return `
+    return `
     <div class="filter-operator-dropdown" data-column-index="${columnIndex}">
-      <div class="filter-operator-trigger ${isActive ? "active" : ""}" 
-           data-column-index="${columnIndex}">
-        <span class="filter-operator-icon">${getFilterIcon(currentOperator)}</span>
+      <div class="filter-operator-trigger ${
+        isActive ? "active" : ""
+      }" data-column-index="${columnIndex}">
+        <span class="filter-operator-icon">${getFilterIcon(
+          currentOperator
+        )}</span>
       </div>
-      
-      <!-- ✅ Menú INLINE (no creado con document.createElement) -->
-      <div class="filter-operator-menu ${isActive ? "active" : ""}" 
-           data-column-index="${columnIndex}">
-        ${operators.map(op => `
-          <div class="filter-operator-option ${op === currentOperator ? "selected" : ""}" 
-               data-operator="${op}"
-               data-column-index="${columnIndex}">
+      <div class="filter-operator-menu ${
+        isActive ? "active" : ""
+      }" data-column-index="${columnIndex}">
+        ${operators
+          .map(
+            (op) => `
+          <div 
+            class="filter-operator-option ${
+              op === currentOperator ? "selected" : ""
+            }" 
+            data-operator="${op}"
+            data-column-index="${columnIndex}"
+          >
             <span class="filter-operator-icon">${getFilterIcon(op)}</span>
-            <span class="filter-operator-text">${this._lang.filtering.operators[op]}</span>
+            <span class="filter-operator-text">${
+              this._lang.filtering.operators[op]
+            }</span>
           </div>
-        `).join("")}
+        `
+          )
+          .join("")}
       </div>
     </div>
   `;
-}
+  }
 
   private renderFilterInput(
     header: GridieHeaderConfig,
@@ -4926,13 +4444,7 @@ private handleJumpTo(footer: Element): void {
     return;
   }
 
-  //   console.log("🎨 ========== RENDER START ==========");
-  // console.log("Headers:", this.headers);
-  // console.log("hasFilterRow():", this.hasFilterRow());
-  // console.log("Filter row HTML length:", this.renderFilterRow().length);
-
-
-
+  
   const headers = this.headers;
   const body = this._config.paging?.enabled && this._config.mode === "client"
     ? this._pagedBody
@@ -4947,195 +4459,7 @@ private handleJumpTo(footer: Element): void {
       ${filterRowStyles}
       ${paginationStyles}
 
-
-      /* ✅ MENÚS CON POSITION FIXED */
-.gridie-context-menu,
-.header-filter-menu {
-  position: fixed;
-  z-index: 10000;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  font-family: Arial, sans-serif;
-}
-
-.header-filter-menu {
-  max-height: min(400px, 70vh);
-  overflow-y: auto;
-  min-width: 200px;
-  padding: 4px 0;
-}
-
-.gridie-context-menu {
-  min-width: 180px;
-  padding: 4px 0;
-}
-
-/* El resto de estilos permanecen igual */
-.header-filter-search {
-  padding: 8px;
-  border-bottom: 1px solid #eee;
-}
-
-.header-filter-search input {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.header-filter-search input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.header-filter-select-all {
-  font-weight: 600;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 4px;
-}
-
-.header-filter-option {
-  padding: 6px 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  user-select: none;
-  font-size: 14px;
-}
-
-.header-filter-option:hover {
-  background-color: #f5f5f5;
-}
-
-.header-filter-option input[type="checkbox"] {
-  cursor: pointer;
-  margin: 0;
-}
-
-.header-filter-option span {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.header-filter-option-parent {
-  padding: 6px 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  user-select: none;
-  font-weight: 500;
-  color: #333;
-  font-size: 14px;
-}
-
-.header-filter-option-parent:hover {
-  background-color: #f0f0f0;
-}
-
-.header-filter-expand-icon {
-  width: 14px;
-  height: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.header-filter-expand-icon svg {
-  width: 100%;
-  height: 100%;
-}
-
-.header-filter-separator {
-  height: 1px;
-  background-color: #eee;
-  margin: 4px 0;
-}
-
-.context-menu-item {
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s;
-  user-select: none;
-  display: flex;
-  gap: 10px;
-}
-
-.context-menu-item:hover {
-  background: #f0f0f0;
-}
-
-.sort-icon {
-  display: flex;
-  width: 16px;
-  height: 16px;
-}
-
-.context-menu-divider {
-  height: 1px;
-  background: #e0e0e0;
-  margin: 4px 0;
-}
-
-
       
-/* ✅ CONTENEDOR: Contexto de posicionamiento */
-.gridie-container {
-  position: relative;
-  width: 100%;
-  overflow-x: auto;
-  overflow-y: visible;
-  font-family: Arial, sans-serif;
-}
-
-/* ✅ WRAPPER DE LA TABLA */
-.gridie-table-wrapper {
-  position: relative;
-  overflow-x: auto;
-  overflow-y: visible;
-  width: 100%;
-}
-
-/* ✅ MENÚS: Todos posicionados absolute dentro del container */
-.gridie-context-menu,
-.header-filter-menu {
-  position: absolute;
-  z-index: 10000;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  max-width: 90vw; /* No más ancho que la ventana */
-}
-
-/* ✅ Header filter con max-height y scroll */
-.header-filter-menu {
-  max-height: min(400px, 70vh);
-  overflow-y: auto;
-  min-width: 200px;
-  padding: 4px 0;
-}
-
-/* ✅ Context menu */
-.gridie-context-menu {
-  min-width: 180px;
-  padding: 4px 0;
-}
-
-/* ✅ CRÍTICO: Evitar que el scroll del container afecte los menús */
-.gridie-container:has(.gridie-context-menu),
-.gridie-container:has(.header-filter-menu) {
-  overflow: visible; /* Permitir que los menús salgan */
-}
 
 
       .gridie-context-menu {
@@ -5252,7 +4576,7 @@ private handleJumpTo(footer: Element): void {
 
       /* Estilos para dropdown de operadores */
       .filter-operator-menu {
-        position: fixed !important;
+        position: absolute;
         top: 100%;
         left: 0;
         background: white;
@@ -5549,12 +4873,7 @@ private handleJumpTo(footer: Element): void {
   this.attachFilterEvents();
   this.attachHeaderFilterEvents();
   this.attachPaginationEvents();
-
-
 }
-
-
-
 
 
   // Renderizar icono del Header Filter

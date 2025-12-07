@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "verbatimModuleSyntax": false,
+    "erasableSyntaxOnly": false
+  },
+  "include": ["src/gridie/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/features",
+    "src/main.ts",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
+}

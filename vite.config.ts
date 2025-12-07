@@ -4,19 +4,22 @@ import { resolve } from 'path';
 export default defineConfig({
   build: {
     lib: {
-      entry: resolve(__dirname, 'src/wc/MyElement.ts'),
-      name: 'MyElement',
-      fileName: (format) => `my-element.${format}.js`,
-      formats: ['es', 'umd']
+      entry: resolve(__dirname, 'src/gridie/index.ts'),
+      name: 'Gridie',
+      formats: ['es', 'umd'],
+      fileName: (format) => `gridie.${format}.js`
     },
     rollupOptions: {
-      // Asegúrate de externalizar dependencias que no quieres en el bundle
-      external: [],
       output: {
-        globals: {}
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name === 'style.css') return 'gridie.css';
+          return assetInfo.name || '';
+        }
       }
     },
-    outDir: 'dist',
-    emptyOutDir: false
+    sourcemap: true,
+    emptyOutDir: true,
+    minify: 'esbuild',
+    target: 'es2015'
   }
 });

@@ -75,3 +75,29 @@
   border-radius: 4px;
   display: inline-block;
 }
+
+
+.filter-operator-dropdown {
+  position: relative; /* ← IMPORTANTE */
+  display: inline-block;
+}
+
+.filter-operator-menu {
+  position: absolute;
+  top: 100%; /* Justo debajo del trigger */
+  left: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 10000;
+  display: none;
+  margin-top: 2px;
+}
+
+.filter-operator-menu.active {
+  display: block;
+}
